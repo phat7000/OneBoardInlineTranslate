@@ -59,3 +59,14 @@ Alternatives considered: Framework-dependent deployment, MSI tooling, MSIX, or a
 Reason: This gives a small operational surface, no prerequisite .NET install, no admin requirement, and a familiar uninstall path.
 
 Security/privacy impact: The application remains `asInvoker`; user settings are not removed or silently uploaded. Builds remain honestly documented as unsigned without a trusted certificate.
+
+
+## 2026-09-22 - Defer one-action selected-text replacement enhancement
+
+Decision: Preserve the intended quick-action behavior for a future release: when the user selects only a sentence or text range and invokes a configured translate/replace action, OneBoard translates that exact selected range and replaces only that range in place. The action must never press Enter, trigger Send, submit a form, or automatically transmit the message.
+
+Alternatives considered: Opening Reply Mode for every outbound translation; replacing the full compose control; automatically sending after translation.
+
+Reason: The fast workflow should remain minimal: select text, invoke the action, and get an in-place translation without extra confirmation steps. Reply Mode remains a separate workflow for understanding an incoming message and composing a response. This enhancement is intentionally deferred until after more real-world usage of v1.x.
+
+Security/privacy impact: Reuse the existing foreground validation, transactional clipboard restoration, selected-range-only replacement, and no-auto-send invariants. If the original destination cannot be validated safely, abort or fall back to showing/copying the translated text rather than injecting into an uncertain target.
