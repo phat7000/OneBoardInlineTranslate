@@ -1,0 +1,19 @@
+<Window x:Class="OneBoardInlineTranslate.Views.RegionSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="#520F172A" Topmost="True" ShowInTaskbar="False"
+        Cursor="Cross" KeyDown="Window_KeyDown"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        MouseMove="Window_MouseMove"
+        MouseLeftButtonUp="Window_MouseLeftButtonUp">
+  <Canvas x:Name="SelectionCanvas">
+    <Border x:Name="InstructionPanel" Canvas.Left="24" Canvas.Top="24" Padding="12,8"
+            Background="#F7FFFFFF" CornerRadius="8">
+      <TextBlock Foreground="#172033" FontWeight="SemiBold"
+                 Text="Drag around text to translate · Esc to cancel" />
+    </Border>
+    <Rectangle x:Name="SelectionRectangle" Visibility="Collapsed"
+               Stroke="#60A5FA" StrokeThickness="2" Fill="#18FFFFFF" />
+  </Canvas>
+</Window>

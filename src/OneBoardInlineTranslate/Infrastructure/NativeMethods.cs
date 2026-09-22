@@ -14,12 +14,15 @@ internal static class NativeMethods
     internal const int MaNoActivate = 3;
 
     internal const uint ModAlt = 0x0001;
+    internal const uint ModControl = 0x0002;
+    internal const uint ModShift = 0x0004;
     internal const uint ModNoRepeat = 0x4000;
 
     internal const int VkControl = 0x11;
     internal const int VkMenu = 0x12;
     internal const int VkQ = 0x51;
     internal const int VkE = 0x45;
+    internal const int VkR = 0x52;
     internal const int VkC = 0x43;
     internal const int VkV = 0x56;
 
@@ -49,6 +52,13 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool IsWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForWindow(nint hWnd);
 
     [DllImport("user32.dll")]
     internal static extern short GetAsyncKeyState(int virtualKey);

@@ -3,6 +3,10 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using Clipboard = System.Windows.Clipboard;
+using DataObject = System.Windows.DataObject;
+using IDataObject = System.Windows.IDataObject;
+using TextDataFormat = System.Windows.TextDataFormat;
 
 namespace OneBoardInlineTranslate.Infrastructure;
 

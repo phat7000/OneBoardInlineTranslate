@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
@@ -13,5 +13,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OneBoardInlineTranslate\OneBoardInlineTranslate.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\fixtures\*.png.b64">
+      <Link>fixtures\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

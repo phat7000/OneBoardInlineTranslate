@@ -37,4 +37,38 @@ internal sealed class ForegroundWindowService
     internal static bool IsStillForeground(ForegroundContext context) =>
         NativeMethods.IsWindow(context.WindowHandle) &&
         NativeMethods.GetForegroundWindow() == context.WindowHandle;
+
+    internal static bool IsValidDestination(ForegroundContext context)
+    {
+        if (!NativeMethods.IsWindow(context.WindowHandle))
+        {
+            return false;
+        }
+
+        NativeMethods.GetWindowThreadProcessId(context.WindowHandle, out var processId);
+        return processId == context.ProcessId;
+    }
+
+    internal static async Task<bool> ActivateOriginalAsync(
+        ForegroundContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!IsValidDestination(context) || !NativeMethods.SetForegroundWindow(context.WindowHandle))
+        {
+            return false;
+        }
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsStillForeground(context))
+            {
+                return true;
+            }
+
+            await Task.Delay(25, cancellationToken);
+        }
+
+        return false;
+    }
 }

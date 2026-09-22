@@ -1,25 +1,28 @@
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using OneBoardInlineTranslate.Infrastructure;
 using OneBoardInlineTranslate.Models;
+using OneBoardInlineTranslate.Services;
+using Color = System.Windows.Media.Color;
 
 namespace OneBoardInlineTranslate;
 
 public partial class OverlayWindow : Window
 {
-    private static readonly TimeSpan VisibleDuration = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan VisibleDuration = TimeSpan.FromSeconds(12);
     private readonly DispatcherTimer _hideTimer;
+    private readonly IClipboardService _clipboard;
     private HwndSource? _source;
     private bool _windowHookInstalled;
+    private string _translationText = string.Empty;
 
-    internal OverlayWindow()
+    internal OverlayWindow(IClipboardService clipboard)
     {
         InitializeComponent();
-        _hideTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = VisibleDuration
-        };
+        _clipboard = clipboard;
+        _hideTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = VisibleDuration };
         _hideTimer.Tick += (_, _) =>
         {
             _hideTimer.Stop();
@@ -34,30 +37,32 @@ public partial class OverlayWindow : Window
         return handle;
     }
 
-    internal void ShowCapture(
-        ForegroundContext context,
-        CaptureResult result,
-        string status = "CAPTURED")
+    internal void ShowTranslation(ForegroundContext context, string original, TranslationResult result)
     {
-        StatusText.Text = status;
-        StatusText.Foreground = result.Success
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x84, 0xD8, 0xFF))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0x91, 0x91));
-        ProcessText.Text = $"Process: {context.ProcessName}";
-        CapturedText.Text = result.Success ? result.Text : "Capture failed — selection was not changed.";
-        MethodText.Text = $"Method: {result.Method}";
-        TimingText.Text = $"{result.LatencyMilliseconds} ms";
-
+        StatusText.Text = "TRANSLATED";
+        StatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x20, 0x33));
+        SourceLanguageText.Text = result.SourceLanguage.DisplayName.ToUpperInvariant();
+        OriginalText.Text = original;
+        TargetLanguageText.Text = result.TargetLanguage.DisplayName.ToUpperInvariant();
+        TranslatedText.Text = result.Text;
+        _translationText = result.Text;
+        MetadataText.Text = $"{result.ProviderId} · {result.Latency.TotalMilliseconds:0} ms";
         ShowWithoutActivation(context.WindowHandle);
     }
 
-    internal void ShowFailure(string processName, long latencyMilliseconds)
+    internal void ShowMessage(ForegroundContext? context, string title, string message, bool isError = false)
     {
-        var fallbackContext = new ForegroundContext(nint.Zero, 0, 0, processName);
-        var result = CaptureResult.Failed(
-            latencyMilliseconds,
-            new InvalidOperationException("The operation failed."));
-        ShowCapture(fallbackContext, result, "FAILED");
+        StatusText.Text = title.ToUpperInvariant();
+        StatusText.Foreground = new SolidColorBrush(isError
+            ? Color.FromRgb(0xDC, 0x26, 0x26)
+            : Color.FromRgb(0x17, 0x20, 0x33));
+        SourceLanguageText.Text = string.Empty;
+        OriginalText.Text = string.Empty;
+        TargetLanguageText.Text = string.Empty;
+        TranslatedText.Text = message;
+        _translationText = message;
+        MetadataText.Text = string.Empty;
+        ShowWithoutActivation(context?.WindowHandle ?? nint.Zero);
     }
 
     protected override void OnClosed(EventArgs eventArgs)
@@ -70,16 +75,32 @@ public partial class OverlayWindow : Window
         base.OnClosed(eventArgs);
     }
 
+    private async void Copy_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        try
+        {
+            await _clipboard.CopyTextAsync(_translationText, CancellationToken.None);
+            MetadataText.Text = "Copied";
+        }
+        catch
+        {
+            MetadataText.Text = "Clipboard unavailable";
+        }
+    }
+
+    private void Close_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        _hideTimer.Stop();
+        Hide();
+    }
+
     private void ConfigureNonActivatingWindow(nint handle)
     {
         var extendedStyle = NativeMethods.GetWindowLong(handle, NativeMethods.GwlExStyle);
         NativeMethods.SetWindowLong(
             handle,
             NativeMethods.GwlExStyle,
-            extendedStyle |
-            NativeMethods.WsExNoActivate |
-            NativeMethods.WsExToolWindow |
-            NativeMethods.WsExTransparent);
+            extendedStyle | NativeMethods.WsExNoActivate | NativeMethods.WsExToolWindow);
 
         _source ??= HwndSource.FromHwnd(handle);
         if (_source is not null && !_windowHookInstalled)
@@ -111,7 +132,6 @@ public partial class OverlayWindow : Window
         UpdateLayout();
         var overlayHandle = new WindowInteropHelper(this).Handle;
         ConfigureNonActivatingWindow(overlayHandle);
-
         var monitor = NativeMethods.MonitorFromWindow(
             sourceWindow == nint.Zero ? overlayHandle : sourceWindow,
             NativeMethods.MonitorDefaultToNearest);
@@ -119,13 +139,23 @@ public partial class OverlayWindow : Window
 
         if (monitor != nint.Zero &&
             NativeMethods.GetMonitorInfo(monitor, ref monitorInfo) &&
-            NativeMethods.GetWindowRect(overlayHandle, out var windowRect))
+            NativeMethods.GetWindowRect(overlayHandle, out var overlayRect))
         {
-            var width = windowRect.Right - windowRect.Left;
-            var height = windowRect.Bottom - windowRect.Top;
-            const int edgeOffset = 16;
-            var x = monitorInfo.WorkArea.Right - width - edgeOffset;
-            var y = monitorInfo.WorkArea.Top + edgeOffset;
+            NativeMethods.Rect sourceRect;
+            if (sourceWindow == nint.Zero || !NativeMethods.GetWindowRect(sourceWindow, out sourceRect))
+            {
+                sourceRect = monitorInfo.WorkArea;
+            }
+
+            var work = new PixelRect(
+                monitorInfo.WorkArea.Left,
+                monitorInfo.WorkArea.Top,
+                monitorInfo.WorkArea.Right,
+                monitorInfo.WorkArea.Bottom);
+            var source = new PixelRect(sourceRect.Left, sourceRect.Top, sourceRect.Right, sourceRect.Bottom);
+            var width = overlayRect.Right - overlayRect.Left;
+            var height = overlayRect.Bottom - overlayRect.Top;
+            var (x, y) = OverlayPositioner.Place(source, work, width, height);
             NativeMethods.SetWindowPos(
                 overlayHandle,
                 NativeMethods.HwndTopmost,
