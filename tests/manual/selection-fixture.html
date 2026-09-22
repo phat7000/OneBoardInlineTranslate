@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OneBoard Inline Translate — Phase 0 fixture</title>
+  <style>
+    :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+    body { max-width: 880px; margin: 40px auto; padding: 0 24px; }
+    section { border: 1px solid #7776; border-radius: 10px; margin: 18px 0; padding: 18px; }
+    textarea, input, [contenteditable] { box-sizing: border-box; font: inherit; padding: 10px; width: 100%; }
+    textarea { min-height: 150px; }
+    [contenteditable] { border: 1px solid #888; min-height: 90px; }
+    code { background: #7772; border-radius: 4px; padding: 2px 5px; }
+    #submit-count { font-weight: 700; color: #d54; }
+  </style>
+</head>
+<body>
+  <h1>OneBoard Inline Translate — Phase 0 fixture</h1>
+  <p>This file is local and makes no network requests.</p>
+
+  <section>
+    <h2>Read-only selection samples</h2>
+    <p id="short">hello</p>
+    <p id="multiline">first line<br>second line<br>third line</p>
+    <p id="vietnamese" lang="vi">Xin chào Việt Nam — tiếng Việt có dấu.</p>
+    <p id="chinese" lang="zh-Hans">你好，世界。这是简体中文。</p>
+  </section>
+
+  <section>
+    <h2>Editable samples</h2>
+    <label for="editor">Textarea</label>
+    <textarea id="editor">hello
+Xin chào Việt Nam — tiếng Việt có dấu.
+你好，世界。这是简体中文。</textarea>
+
+    <p>Contenteditable</p>
+    <div id="rich-editor" contenteditable="true">hello<br>second line<br>Xin chào Việt Nam<br>你好，世界</div>
+  </section>
+
+  <section>
+    <h2>No-accidental-submit sentinel</h2>
+    <form id="submit-sentinel">
+      <label for="single-line">Select <code>hello</code>, then press Alt+E</label>
+      <input id="single-line" value="hello">
+      <button type="submit">Submit manually</button>
+    </form>
+    <p>Submit count: <span id="submit-count">0</span> (must stay 0 during hotkey tests)</p>
+  </section>
+
+  <script>
+    let submitCount = 0;
+    document.querySelector('#submit-sentinel').addEventListener('submit', event => {
+      event.preventDefault();
+      submitCount += 1;
+      document.querySelector('#submit-count').textContent = String(submitCount);
+    });
+  </script>
+</body>
+</html>

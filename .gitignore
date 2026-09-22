@@ -1,0 +1,17 @@
+.vs/
+.vscode/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.nupkg
+TestResults/
+artifacts/
+publish/
+*.log
+*.jsonl
+*.pfx
+*.snk
+*.user.json
+settings.json
+.idea/
