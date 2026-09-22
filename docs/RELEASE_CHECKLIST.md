@@ -33,4 +33,4 @@
 - [x] `v*` release workflow added with `contents: write`.
 - [x] Clean final source tree committed and pushed to `main`.
 - [x] Annotated `v1.0.0` tag created and pushed.
-- [ ] GitHub Actions release result and attached artifacts verified.
+- [x] GitHub Actions release result and attached artifacts verified.

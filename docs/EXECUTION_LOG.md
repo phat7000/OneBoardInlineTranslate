@@ -19,3 +19,5 @@
 - 2026-09-22: Created portable ZIP (82,712,077 bytes, SHA-256 `1524B75B9993658D23BF3813A9D9EAB65E9EE7C3885996E7C15CB611A84CF4A8`) and unsigned installer (60,665,533 bytes, SHA-256 `E77B6F0DE9D78781F494BA38D9FCBB4A476BD369F440971EA3BE8D109BC496E8`).
 - 2026-09-22: Portable launch and installer install/launch/uninstall smoke checks passed; ProductVersion is exactly 1.0.0.
 - 2026-09-22: Phase 8 feasible local gate completed; release preparation committed to main and annotated v1.0.0 published. GitHub workflow verification remains an external observed-state check.
+- 2026-09-22: Release commit `10f12e8e07e683bd45db7a1c2432ab3ab733ebf8` and annotated v1.0.0 pushed. CI run 35709044755 completed successfully.
+- 2026-09-22: Release run 35709064606 completed successfully. GitHub Release 393590467 is public (not draft/prerelease) with the portable ZIP and installer EXE uploaded.
