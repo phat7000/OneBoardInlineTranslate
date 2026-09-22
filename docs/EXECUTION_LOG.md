@@ -14,3 +14,8 @@
 - 2026-09-22: Phase 7 completed: multi-monitor region selection, in-memory capture, local Windows OCR, and static fixtures.
 - 2026-09-22: Release x64 build passed with 0 warnings/errors; default 21/21, clipboard 22/22, and cross-process 22/22 suites passed.
 - 2026-09-22: Phase 8 started: public docs, security review, CI/release workflows, and packaging.
+- 2026-09-22: Security audit found no hardcoded credentials, no production Enter/send path, no tracked private/generated data, no third-party NuGet packages, and no OCR disk/network path.
+- 2026-09-22: Final format verification and Release x64 build passed with 0 warnings/errors; clipboard and cross-process suites both passed 22/22.
+- 2026-09-22: Created portable ZIP (82,712,077 bytes, SHA-256 `1524B75B9993658D23BF3813A9D9EAB65E9EE7C3885996E7C15CB611A84CF4A8`) and unsigned installer (60,665,533 bytes, SHA-256 `E77B6F0DE9D78781F494BA38D9FCBB4A476BD369F440971EA3BE8D109BC496E8`).
+- 2026-09-22: Portable launch and installer install/launch/uninstall smoke checks passed; ProductVersion is exactly 1.0.0.
+- 2026-09-22: Phase 8 feasible local gate completed; release preparation committed to main and annotated v1.0.0 published. GitHub workflow verification remains an external observed-state check.

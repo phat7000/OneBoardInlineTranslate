@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore .\OneBoardInlineTranslate.sln
+      - name: Verify formatting
+        run: dotnet format .\OneBoardInlineTranslate.sln --verify-no-changes --no-restore
+      - name: Build Release x64
+        run: dotnet build .\OneBoardInlineTranslate.sln -c Release -p:Platform=x64 --no-restore
+      - name: Run safe automated tests
+        run: dotnet run --project .\tests\OneBoardInlineTranslate.SmokeTests\OneBoardInlineTranslate.SmokeTests.csproj -c Release -p:Platform=x64 --no-build

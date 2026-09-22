@@ -1,137 +1,81 @@
 # Architecture
 
-## Purpose and boundary
+## Product boundary
 
-OneBoard Inline Translate Phase 0 answers one question: can a Windows process capture and replace the user's current selection across the five target application categories without taking focus, leaving clipboard data behind, or sending a message?
-
-It is a single local WPF process. There is no database, network client, telemetry SDK, translation component, OCR engine, authentication layer, installer, or update service.
+OneBoard Inline Translate is one per-user WPF process targeting .NET 10 and Windows x64. It has no backend, account system, database, telemetry SDK, translation history, browser scraper, or auto-send capability.
 
 ## Runtime flow
 
 ```mermaid
-flowchart TD
-    HK[WM_HOTKEY: Alt+Q or Alt+E] --> FG[Snapshot foreground HWND/process]
-    FG --> KR[Wait until Alt and trigger key are released]
-    KR --> VC{Same HWND still foreground?}
-    VC -- No --> AB[Abort safely and log metadata]
-    VC -- Yes --> UIA[Try UI Automation TextPattern]
-    UIA -->|Non-empty selection| CAP[Captured text + UIA method]
-    UIA -->|Unavailable, empty, error, or 450 ms timeout| CBF[Transactional clipboard capture]
-    CBF --> CAP2[Captured text + Clipboard method]
-    CAP --> MODE{Hotkey}
-    CAP2 --> MODE
-    MODE -- Alt+Q --> OV[Show non-activating overlay]
-    MODE -- Alt+E --> TX[Prefix text with TEST marker]
-    TX --> RP[Transactional clipboard paste]
-    RP --> OV
-    OV --> LOG[Append metadata-only local diagnostic]
+flowchart LR
+    HK[Global hotkey] --> FG[Snapshot foreground HWND/process]
+    FG --> CAP[UIA selection]
+    CAP -->|unavailable| CB[Transactional clipboard copy]
+    CAP --> ROUTE[Operation router]
+    CB --> ROUTE
+    ROUTE --> TX[Provider-neutral translation]
+    TX --> OV[Non-activating overlay]
+    TX --> REPLACE[Revalidate HWND and paste selection]
+    TX --> REPLY[Reply preview and explicit insert/copy]
+    OCR[Region selection + local Windows OCR] --> TX
 ```
-
-The coordinator permits only one hotkey operation at a time. Repeated keydown notifications are suppressed by `MOD_NOREPEAT`, and a second operation is ignored while the first owns the operation gate.
 
 ## Components
 
-| Component | Responsibility |
+| Area | Responsibility |
 |---|---|
-| `GlobalHotkeyService` | Registers Alt+Q and Alt+E and converts `WM_HOTKEY` into typed actions. |
-| `ForegroundWindowService` | Snapshots HWND, process/thread identity, and verifies that the source remains foreground. |
-| `UiaSelectionReader` | Finds the keyboard-focused element beneath the foreground window, walks ancestors, and reads non-degenerate `TextPattern` selection ranges. |
-| `SelectedTextCaptureService` | Runs UIA as a bounded, single-flight attempt and routes failures to clipboard capture. |
-| `ClipboardSelectionReader` | Installs a sentinel, emits Ctrl+C, waits for the clipboard sequence number to change, and reads Unicode text. |
-| `ClipboardTransaction` | Eagerly clones every advertised clipboard format, provides temporary data, retries contention, and restores a persisted snapshot on every exit path. |
-| `TextReplacementService` | Places the Phase 0 value on the temporary clipboard, revalidates foreground HWND, emits Ctrl+V, allows paste consumption, and restores the clipboard. |
-| `KeyboardInputService` | Uses correctly sized x64 `SendInput` structures for Ctrl+C and Ctrl+V only. |
-| `OverlayWindow` | Shows process, captured text, method, and timing without activation. |
-| `LocalDiagnosticLogger` | Appends allow-listed JSON Lines records beneath `%LOCALAPPDATA%`. |
-| `PhaseZeroTransformer` | Implements only `[TEST] ` prefixing. |
+| `Infrastructure` | Win32 hotkeys, foreground identity, keyboard chords, single instance, and transactional clipboard safety |
+| `Services` | capture/replacement, settings, startup, translation orchestration, language detection, reply, tray, and overlay positioning |
+| `Providers` | supported Azure Translator, DeepL, and LibreTranslate-compatible HTTP contracts |
+| `Security` | per-user DPAPI credential protection |
+| `OCR` | region selection orchestration, in-memory screen capture, and Windows OCR |
+| `Views` | Settings, Reply Mode, and region selection WPF surfaces |
+| `Diagnostics` | metadata-only local JSON Lines logging |
 
-## Capture pipeline
+## Safety invariants
 
-### 1. Foreground snapshot
+### No automatic send
 
-The window handle is captured synchronously inside the `WM_HOTKEY` handler before any await. The process name is diagnostic/display metadata; the HWND is the authority for safety decisions.
+The only synthesized input chords are Ctrl+C and Ctrl+V. No Enter virtual key is declared. The application does not discover or invoke send buttons, submit forms, target application APIs, or message APIs. Reply Mode inserts only after an explicit click and never sends.
 
-### 2. UI Automation
+### Clipboard transaction
 
-UIA work executes on a worker thread because third-party providers can be slow or re-entrant. The caller waits at most 450 ms. A semaphore allows only one outstanding UIA provider call; if a provider stalls indefinitely, later captures go directly to the clipboard instead of creating unbounded stuck calls.
+Before temporary clipboard use, every advertised format is eagerly materialized into an independent `DataObject`. If any value cannot be cloned safely, the operation aborts before mutation. Temporary data carries `ExcludeClipboardContentFromMonitorProcessing`; restoration uses a persistent clipboard write with a longer retry window and is not cancelled when the originating operation is cancelled.
 
-The reader starts at the keyboard-focused element within the foreground window, attempts `TextPattern`, and walks up the raw accessibility tree. Only non-degenerate, non-empty selection ranges succeed. Multiple ranges are joined with the platform newline.
+### Foreground authority
 
-### 3. Clipboard fallback
+The hotkey-time HWND and process ID are authoritative. Ctrl+C and Ctrl+V are emitted only after the HWND is revalidated as the foreground window. Reply Mode may reactivate its recorded source window after explicit Insert; it verifies the HWND still exists, belongs to the same process, and becomes foreground. Failure falls back to explicit clipboard copy.
 
-```mermaid
-sequenceDiagram
-    participant O as OneBoard
-    participant W as Windows Clipboard
-    participant A as Source App
-    O->>W: Materialize all advertised formats into local DataObject
-    O->>W: Set history-excluded sentinel
-    O->>A: SendInput Ctrl+C
-    loop Until update or 1500 ms
-        O->>W: Check clipboard sequence number
-    end
-    O->>W: Read Unicode text
-    O->>W: Restore snapshot with persistent SetDataObject
-```
+### Non-activating overlay
 
-The sequence-number sentinel prevents stale clipboard text from being mistaken for the selection. Clipboard calls retry short-lived contention. Restoration ignores operation cancellation and receives a longer retry window than ordinary reads/writes. Snapshot values are cloned by type (strings, arrays, streams, bitmap sources, URIs, value types, and cloneable objects) and restored with `copy:true`, which persists them independently of the external clipboard owner's delayed-rendering lifetime. If any advertised format is null or uses an unsupported type, the transaction refuses to start before any clipboard mutation.
+The translation overlay uses `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, `ShowActivated=false`, `SWP_NOACTIVATE`, and a `WM_MOUSEACTIVATE` guard. Placement is computed in monitor pixel coordinates and clamped to the work area.
 
-## Replacement pipeline
+## Translation architecture
 
-Standard UI Automation has no general selected-range write operation. `TextPatternRange` is read-only, while `ValuePattern.SetValue` replaces an entire control and can destroy surrounding user content. Phase 0 therefore does not use unsafe UIA replacement.
+`ITranslationService` accepts a `TranslationRequest` and delegates to an `ITranslationProvider`. Capture, overlay, replace, reply, and OCR code depend only on the service interface. Domain model `ToString()` implementations report metadata and text length, never content.
 
-Replacement takes a fresh eager multi-format snapshot, places Unicode text on a temporary data object, verifies that the original HWND is still foreground, and sends Ctrl+V. A 350 ms settle interval leaves the temporary provider available while Office/Chromium/Electron dispatch the paste. The persistent snapshot is then restored.
+Provider endpoints must use HTTPS, except loopback HTTP for a locally hosted LibreTranslate-compatible service. `HttpClient` applies a bounded request timeout, connection pooling, and automatic response decompression. Production requests do not run until the user invokes a translation action.
 
-No code emits Enter, invokes a send button, calls a submit API, or inspects target-app internals.
+## Credentials and settings
 
-## Focus and overlay invariants
+Non-sensitive versioned JSON lives at `%LOCALAPPDATA%\OneBoardInlineTranslate\settings.json`. Corrupt JSON falls back to safe defaults. Provider secrets are stored separately in a DPAPI-encrypted per-user file and never serialized with settings. Startup uses the current user's `Run` registry key and requires no administrator rights.
 
-- Input is sent only when `GetForegroundWindow()` equals the hotkey-time HWND.
-- Alt and the trigger key must be physically released before Ctrl+C/Ctrl+V injection.
-- The overlay has `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, and `WS_EX_TRANSPARENT`.
-- WPF uses `ShowActivated=false`, `Focusable=false`, and `IsHitTestVisible=false`.
-- Native positioning uses `SWP_NOACTIVATE`.
-- A `WM_MOUSEACTIVATE` guard returns `MA_NOACTIVATE`.
+## OCR data flow
 
-The program never calls `SetForegroundWindow`; it will not pull the user back if they intentionally switch applications.
+The selector returns physical screen coordinates under PerMonitorV2 awareness. GDI captures only the selected rectangle into an HBITMAP, which is copied into a frozen WPF bitmap and immediately releases native handles. Oversized images are downscaled in memory to the Windows OCR maximum. Windows OCR engines for installed English, Vietnamese, and Simplified Chinese packs are considered. No screenshot path or disk write exists in the runtime flow.
 
-## Threading model
+## Threading and cancellation
 
-- The WPF dispatcher is the owning STA for clipboard snapshot, mutation, and restoration operations.
-- `await` continuations for capture/replacement return to that dispatcher.
-- UI Automation provider calls run on a worker thread and never mutate the clipboard or inject input.
-- One coordinator semaphore serializes complete hotkey operations.
-- One logger semaphore serializes JSON Lines appends.
+- WPF owns clipboard operations on the application STA dispatcher.
+- UI Automation provider calls run on a bounded single-flight worker path.
+- One coordinator semaphore serializes hotkey operations.
+- Translation and provider HTTP operations accept cancellation tokens.
+- App shutdown cancels the active pipeline while clipboard restoration ignores cancellation.
 
-## Diagnostics and data handling
+## Diagnostics
 
-`DiagnosticRecord` has exactly six serialized properties: timestamp, process, capture method, success, latency, and exception type. Its constructor has no captured-text parameter. Exception messages and stack traces are not serialized. Smoke checks reflect over the JSON schema and verify that an exception message containing sensitive sample text is absent.
+The allow-listed diagnostic record includes timestamp, process, capture method, success, latency, and exception type. It excludes text, clipboard content, endpoint credentials, exception messages, response bodies, and stack traces. Logs remain local under `%LOCALAPPDATA%\OneBoardInlineTranslate\logs`.
 
-Captured text exists transiently in process memory and in the non-activating overlay because those are required functions. During clipboard fallback it also exists temporarily in the Windows clipboard provider. Temporary data advertises the presence-based Windows `ExcludeClipboardContentFromMonitorProcessing` format, which [excludes the item from history and cloud synchronization](https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats).
+## Deployment
 
-## Source layout
-
-```text
-src/OneBoardInlineTranslate/                WPF executable
-  Diagnostics/                              local allow-listed logging
-  Infrastructure/                           Win32/clipboard, hotkeys, foreground, input
-  Models/                                   pipeline result/value types
-  Services/                                 capture and replacement pipelines
-tests/OneBoardInlineTranslate.SmokeTests/   zero-package executable checks
-tests/manual/selection-fixture.html         local Chrome/Edge test surface
-scripts/                                    build and run entry points
-```
-
-## Failure policy
-
-Safety wins over completion:
-
-- changed foreground HWND → abort;
-- unreleased hotkey modifiers → abort;
-- clipboard cannot be snapshotted → do not modify it;
-- copy does not update the sequence number → time out and restore;
-- UIA stalls → use clipboard fallback, with at most one stalled UIA call;
-- clipboard restoration reports failure → mark the operation failed after extended retries;
-- overlay cannot activate by style and message handling.
-
-Cross-application reliability is established only through the versioned manual matrix; a build result alone does not meet the Phase 0 PASS definition.
+Release publishing is self-contained for `win-x64`. The portable ZIP contains published runtime files only. The Inno Setup package installs per user under `%LOCALAPPDATA%\Programs`, provides Start Menu and optional desktop shortcuts, and leaves user settings intact on uninstall. The application manifest requests `asInvoker` and PerMonitorV2 DPI awareness.
