@@ -6,6 +6,18 @@ Provider selection is independent from capture, replacement, overlay, reply, and
 
 Remote endpoints must use HTTPS. A loopback LibreTranslate service may use HTTP. API keys are DPAPI-protected for the current Windows user and never written to settings or logs.
 
+## Google Cloud Translation
+
+Select **Google Cloud Translation** and enter an API key for a Google Cloud project with the **Cloud Translation API** enabled. Billing and quotas are managed in Google Cloud. Restrict the key to the Cloud Translation API and apply appropriate application restrictions where practical.
+
+OneBoard uses Cloud Translation Basic API v2 at:
+
+`https://translation.googleapis.com/language/translate/v2`
+
+The API key is sent in the `X-Goog-Api-Key` HTTP header and is never placed in the request URL. Vietnamese maps to `vi`, English to `en`, and Simplified Chinese to Google `zh-CN` and back to OneBoard `zh-Hans`.
+
+When OneBoard already knows the source language, it supplies `source`. Otherwise it omits `source` and reads `detectedSourceLanguage` from the translation response. It does not make a separate detect-language request, so a normal translation uses one provider request.
+
 ## Azure Translator
 
 Select **Azure Translator**, enter the subscription key and region required by the Azure resource, and leave Endpoint blank for `https://api.cognitive.microsofttranslator.com`. A custom HTTPS resource endpoint is supported.
@@ -26,4 +38,6 @@ LibreTranslate deployments vary. Administrators are responsible for server secur
 
 ## Testing
 
-**Test connection** makes a small translation request and reports only a safe health result. Automated tests use fake HTTP handlers and never call or consume quotas from real provider accounts.
+**Test connection** makes one small translation request and reports `Connected · Provider name · latency ms` on success. Common failures are reduced to safe messages: Invalid API key, Permission denied, Quota exceeded, Rate limited, Timeout, Network unavailable, Provider unavailable, or Invalid endpoint. Provider response bodies and secrets are not displayed or logged.
+
+Automated provider tests use fake HTTP handlers and never call or consume quotas from real provider accounts. Google coverage includes Vietnamese/English/Simplified Chinese direction mapping, auto-detection, Unicode, multiline text, header authentication, invalid keys, quota and rate limits, timeout, cancellation, 5xx, and malformed responses.

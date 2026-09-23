@@ -1,5 +1,5 @@
 #define AppName "OneBoard Inline Translate"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "OneBoard"
 #define AppUrl "https://github.com/phat7000/OneBoardInlineTranslate"
 #ifndef PublishDir
@@ -24,12 +24,12 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=OneBoardInlineTranslate-Setup-1.0.0-win-x64
+OutputBaseFilename=OneBoardInlineTranslate-Setup-1.1.0-win-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\OneBoardInlineTranslate.exe
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=1.1.0.0
 VersionInfoCompany=OneBoard
 VersionInfoDescription=OneBoard Inline Translate Setup
 VersionInfoProductName=OneBoard Inline Translate

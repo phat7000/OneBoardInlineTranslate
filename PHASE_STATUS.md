@@ -2,6 +2,16 @@
 
 Status date: 2026-09-22
 
+## Focused post-v1 Phase 2
+
+| Phase | Status | Evidence |
+|---|---|---|
+| Phase 2 - Google Cloud, provider configuration, fast path, and latency | PASS | Official Cloud Translation Basic v2 provider; `X-Goog-Api-Key` header; one-request auto-detection; provider-specific compact fields and DPAPI credentials; safe latency-bearing connection result; stage timing metadata; fake-handler success/error coverage; complete v1 regressions retained. |
+
+The v1.0.0 capture, clipboard, focus, replacement, and no-send core was not materially changed, so the historical external Teams/Outlook/Zalo/Chrome/Edge matrix was not repeated.
+
+## Historical v1.0.0 phases
+
 | Phase | Status | Evidence |
 |---|---|---|
 | Phase 0 - safe selection capture/replacement proof | PASS | User-confirmed complete manual matrix for Teams Desktop, Outlook Desktop, Zalo Desktop, Chrome, and Edge. User-confirmed PASS on 2026-09-22; detailed qualification metadata not recorded. Automated regression coverage retained. |
@@ -14,18 +24,18 @@ Status date: 2026-09-22
 | Phase 7 - OCR region translate | PASS | PerMonitorV2 region selector, Escape cancellation, in-memory selected-region capture, Windows OCR, installed-language handling, static English/Vietnamese/Chinese fixtures. |
 | Phase 8 - security, packaging, release | PASS | Security/no-send/secret audits passed; Release x64 and all suites passed; portable and installer artifacts built and launch-tested; silent install/uninstall passed; CI and tag-release workflows are ready. |
 
-## Current automated baseline
+## Current v1.1.0 automated baseline
 
 - Release x64 build: 0 warnings, 0 errors.
-- Default automated suite: 21/21 passed.
-- Clipboard integration suite: 22/22 passed.
-- Cross-process end-to-end suite: 22/22 passed.
+- Default automated suite: 35/35 passed.
+- Clipboard integration suite: 36/36 passed.
+- Cross-process end-to-end suite: 36/36 passed.
 - Formatting verification: final `--verify-no-changes` passed.
-- Portable launch smoke: passed with ProductVersion 1.0.0.
-- Installer install, installed-app launch, and uninstall smoke: passed.
+- Portable launch smoke: passed with ProductVersion 1.1.0.
+- Portable ZIP and installer x64 builds: passed; v1.0.0 artifacts were not overwritten.
 
 ## External qualification facts
 
-- No production cloud credentials were supplied; provider behavior is validated with official contract shapes and fake HTTP handlers rather than live billable calls.
+- No Google credential is configured locally; Google behavior is validated with official contract shapes and fake HTTP handlers rather than live billable calls.
 - Installed Windows OCR languages vary by machine; matching fixture recognition is asserted for available packs and missing packs produce a supported setup condition.
 - No trusted code-signing certificate is available in the repository. The release will remain unsigned and must not be represented as trusted-signed.

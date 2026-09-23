@@ -1,5 +1,6 @@
 using System.Windows;
 using OneBoardInlineTranslate.Models;
+using OneBoardInlineTranslate.Providers;
 using OneBoardInlineTranslate.Security;
 using OneBoardInlineTranslate.Services;
 using AppLanguage = OneBoardInlineTranslate.Models.Language;
@@ -12,6 +13,8 @@ public partial class SettingsWindow : Window
     private readonly ICredentialStore _credentials;
     private readonly ITranslationService _translation;
     private readonly StartupService _startup;
+    private readonly string _legacyCredentialProvider;
+    private string _displayedProvider = TranslationProviderNames.None;
 
     internal SettingsWindow(
         ISettingsService settings,
@@ -24,8 +27,9 @@ public partial class SettingsWindow : Window
         _credentials = credentials;
         _translation = translation;
         _startup = startup;
+        _legacyCredentialProvider = settings.Current.TranslationProvider.Provider;
         PreferredLanguageCombo.ItemsSource = AppLanguage.Supported;
-        ProviderCombo.ItemsSource = new[] { "None", "Azure Translator", "DeepL", "LibreTranslate" };
+        ProviderCombo.ItemsSource = TranslationProviderNames.All;
         LoadValues(_settings.Current);
     }
 
@@ -45,6 +49,9 @@ public partial class SettingsWindow : Window
         EndpointBox.Text = settings.TranslationProvider.Endpoint;
         RegionBox.Text = settings.TranslationProvider.Region;
         ApiKeyBox.Password = string.Empty;
+        _displayedProvider = settings.TranslationProvider.Provider;
+        UpdateProviderFields();
+        _ = UpdateCredentialHintAsync();
     }
 
     private async void Save_Click(object sender, RoutedEventArgs eventArgs)
@@ -64,16 +71,48 @@ public partial class SettingsWindow : Window
     private async void TestConnection_Click(object sender, RoutedEventArgs eventArgs)
     {
         ProviderStatusText.Text = "Testing...";
+        TestConnectionButton.IsEnabled = false;
         try
         {
             await SaveValuesAsync();
             var health = await _translation.TestProviderAsync(CancellationToken.None);
-            ProviderStatusText.Text = health.IsHealthy ? "Connected" : $"Unavailable ({health.Status})";
+            ProviderStatusText.Text = health.IsHealthy
+                ? $"Connected · {health.ProviderName} · {health.LatencyMilliseconds} ms"
+                : health.Status;
         }
         catch (Exception exception)
         {
-            ProviderStatusText.Text = $"Unavailable ({exception.GetType().Name})";
+            ProviderStatusText.Text = ProviderHttp.ToStatus(
+                ProviderHttp.FromException(exception, CancellationToken.None));
         }
+        finally
+        {
+            UpdateProviderFields();
+        }
+    }
+
+    private void ProviderCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs eventArgs)
+    {
+        if (!IsInitialized)
+        {
+            return;
+        }
+
+        if (IsLoaded)
+        {
+            ApiKeyBox.Password = string.Empty;
+            var selectedProvider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None;
+            if (!string.Equals(_displayedProvider, selectedProvider, StringComparison.Ordinal))
+            {
+                EndpointBox.Clear();
+                RegionBox.Clear();
+            }
+        }
+
+        _displayedProvider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None;
+        ProviderStatusText.Text = string.Empty;
+        UpdateProviderFields();
+        _ = UpdateCredentialHintAsync();
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs eventArgs) => Close();
@@ -98,7 +137,7 @@ public partial class SettingsWindow : Window
             Hotkeys = hotkeys,
             TranslationProvider = new ProviderConfiguration
             {
-                Provider = ProviderCombo.SelectedItem as string ?? "None",
+                Provider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None,
                 Endpoint = EndpointBox.Text.Trim(),
                 Region = RegionBox.Text.Trim()
             }
@@ -106,12 +145,86 @@ public partial class SettingsWindow : Window
 
         if (!string.IsNullOrEmpty(ApiKeyBox.Password))
         {
-            await _credentials.SetAsync(TranslationService.ApiKeyCredentialName, ApiKeyBox.Password);
+            var provider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None;
+            await _credentials.SetAsync(
+                TranslationService.GetCredentialName(provider),
+                ApiKeyBox.Password);
             ApiKeyBox.Password = string.Empty;
         }
 
         _startup.SetEnabled(settings.StartWithWindows);
         await _settings.SaveAsync(settings);
+        await UpdateCredentialHintAsync();
+    }
+
+    private void UpdateProviderFields()
+    {
+        var provider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None;
+        var showEndpoint = provider is TranslationProviderNames.Azure or
+            TranslationProviderNames.DeepL or TranslationProviderNames.LibreTranslate;
+        var showRegion = provider == TranslationProviderNames.Azure;
+        var showApiKey = provider != TranslationProviderNames.None;
+
+        EndpointLabel.Visibility = showEndpoint ? Visibility.Visible : Visibility.Collapsed;
+        EndpointBox.Visibility = showEndpoint ? Visibility.Visible : Visibility.Collapsed;
+        RegionLabel.Visibility = showRegion ? Visibility.Visible : Visibility.Collapsed;
+        RegionBox.Visibility = showRegion ? Visibility.Visible : Visibility.Collapsed;
+        ApiKeyLabel.Visibility = showApiKey ? Visibility.Visible : Visibility.Collapsed;
+        ApiKeyBox.Visibility = showApiKey ? Visibility.Visible : Visibility.Collapsed;
+        ApiKeyHintText.Visibility = showApiKey ? Visibility.Visible : Visibility.Collapsed;
+        TestConnectionPanel.Visibility = showApiKey ? Visibility.Visible : Visibility.Collapsed;
+        TestConnectionButton.IsEnabled = showApiKey;
+
+        EndpointLabel.Text = provider switch
+        {
+            TranslationProviderNames.Azure => "Endpoint (advanced)",
+            TranslationProviderNames.DeepL => "Endpoint (optional)",
+            TranslationProviderNames.LibreTranslate => "Endpoint",
+            _ => "Endpoint"
+        };
+        ApiKeyLabel.Text = provider == TranslationProviderNames.LibreTranslate
+            ? "API key (optional)"
+            : "API key";
+        ProviderDescriptionText.Text = provider switch
+        {
+            TranslationProviderNames.GoogleCloud => "Cloud Translation Basic v2. The supported Google endpoint is fixed; only an API key is required.",
+            TranslationProviderNames.Azure => "Region is required only for Azure resources that use it. The public endpoint is used unless an advanced endpoint is entered.",
+            TranslationProviderNames.DeepL => "The Free or Pro endpoint is selected from the key unless a custom supported endpoint is entered.",
+            TranslationProviderNames.LibreTranslate => "Enter the complete /translate endpoint. An API key is optional for deployments that do not require one.",
+            _ => "Choose a provider to configure translation."
+        };
+    }
+
+    private async Task UpdateCredentialHintAsync()
+    {
+        var provider = ProviderCombo.SelectedItem as string ?? TranslationProviderNames.None;
+        if (provider == TranslationProviderNames.None)
+        {
+            ApiKeyHintText.Text = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var credential = await _credentials.GetAsync(TranslationService.GetCredentialName(provider));
+            if (string.IsNullOrEmpty(credential) &&
+                provider == _legacyCredentialProvider &&
+                provider != TranslationProviderNames.GoogleCloud)
+            {
+                credential = await _credentials.GetAsync(TranslationService.LegacyApiKeyCredentialName);
+            }
+
+            if (string.Equals(provider, ProviderCombo.SelectedItem as string, StringComparison.Ordinal))
+            {
+                ApiKeyHintText.Text = string.IsNullOrEmpty(credential)
+                    ? "No saved key."
+                    : "A protected key is saved. Leave this blank to keep it.";
+            }
+        }
+        catch
+        {
+            ApiKeyHintText.Text = "The protected key store is unavailable.";
+        }
     }
 
     private static void ValidateHotkeys(HotkeySettings settings)

@@ -26,7 +26,7 @@ flowchart LR
 |---|---|
 | `Infrastructure` | Win32 hotkeys, foreground identity, keyboard chords, single instance, and transactional clipboard safety |
 | `Services` | capture/replacement, settings, startup, translation orchestration, language detection, reply, tray, and overlay positioning |
-| `Providers` | supported Azure Translator, DeepL, and LibreTranslate-compatible HTTP contracts |
+| `Providers` | supported Google Cloud Translation, Azure Translator, DeepL, and LibreTranslate-compatible HTTP contracts |
 | `Security` | per-user DPAPI credential protection |
 | `OCR` | region selection orchestration, in-memory screen capture, and Windows OCR |
 | `Views` | Settings, Reply Mode, and region selection WPF surfaces |
@@ -56,6 +56,8 @@ The translation overlay uses `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, `ShowActiva
 
 Provider endpoints must use HTTPS, except loopback HTTP for a locally hosted LibreTranslate-compatible service. `HttpClient` applies a bounded request timeout, connection pooling, and automatic response decompression. Production requests do not run until the user invokes a translation action.
 
+Google Cloud Translation uses the official Basic v2 `translate` endpoint. The API key is carried only in the `X-Goog-Api-Key` header. When source language is not already known, the request omits `source`, so detection and translation complete in the same provider request.
+
 ## Credentials and settings
 
 Non-sensitive versioned JSON lives at `%LOCALAPPDATA%\OneBoardInlineTranslate\settings.json`. Corrupt JSON falls back to safe defaults. Provider secrets are stored separately in a DPAPI-encrypted per-user file and never serialized with settings. Startup uses the current user's `Run` registry key and requires no administrator rights.
@@ -74,7 +76,7 @@ The selector returns physical screen coordinates under PerMonitorV2 awareness. G
 
 ## Diagnostics
 
-The allow-listed diagnostic record includes timestamp, process, capture method, success, latency, and exception type. It excludes text, clipboard content, endpoint credentials, exception messages, response bodies, and stack traces. Logs remain local under `%LOCALAPPDATA%\OneBoardInlineTranslate\logs`.
+The allow-listed diagnostic record includes timestamp, operation, provider, process, capture method, capture latency, provider latency, output latency, total latency, success, and exception type. It excludes text, clipboard content, endpoint credentials, exception messages, response bodies, and stack traces. Logs remain local under `%LOCALAPPDATA%\OneBoardInlineTranslate\logs`.
 
 ## Deployment
 

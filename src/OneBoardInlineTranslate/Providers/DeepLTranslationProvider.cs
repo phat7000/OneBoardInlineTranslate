@@ -30,13 +30,15 @@ internal sealed class DeepLTranslationProvider : ITranslationProvider
 
     public string Id => "deepl";
 
+    public string DisplayName => TranslationProviderNames.DeepL;
+
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            throw new InvalidOperationException("DeepL API key is not configured.");
+            throw new ProviderException(ProviderFailure.InvalidApiKey);
         }
 
         var fields = new List<KeyValuePair<string, string>>
@@ -54,7 +56,7 @@ internal sealed class DeepLTranslationProvider : ITranslationProvider
         message.Content = new FormUrlEncodedContent(fields);
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var translation = document.RootElement.GetProperty("translations")[0];
@@ -79,13 +81,13 @@ internal sealed class DeepLTranslationProvider : ITranslationProvider
 
     public async Task<ProviderHealth> TestAsync(CancellationToken cancellationToken)
     {
-        await TranslateAsync(new TranslationRequest
+        var result = await TranslateAsync(new TranslationRequest
         {
             Text = "Hello",
             SourceLanguage = Language.English,
             TargetLanguage = Language.Vietnamese
         }, cancellationToken);
-        return new ProviderHealth(true, Id, "Connection successful");
+        return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
     }
 
     private static string ToDeepLCode(Language language) => language.Code switch

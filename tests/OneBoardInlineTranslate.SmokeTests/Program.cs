@@ -39,10 +39,24 @@ internal static class Program
         ,("Single-instance guard rejects a duplicate", TestSingleInstanceAsync)
         ,("Settings persist and recover from corruption", TestSettingsAsync)
         ,("Credentials are DPAPI protected", TestCredentialsAsync)
+        ,("Provider credentials migrate without cross-provider reuse", TestProviderCredentialIsolationAsync)
         ,("Language detection covers v1 languages", TestLanguageDetectionAsync)
         ,("Translation models redact content", TestTranslationModelRedactionAsync)
         ,("Fake-provider translation preserves content", TestFakeTranslationAsync)
         ,("Provider HTTP contracts use supported APIs", TestProviderContractsAsync)
+        ,("Google translates Vietnamese to English", TestGoogleVietnameseToEnglishAsync)
+        ,("Google translates English to Vietnamese", TestGoogleEnglishToVietnameseAsync)
+        ,("Google translates Simplified Chinese to Vietnamese", TestGoogleChineseToVietnameseAsync)
+        ,("Google auto-detects source in one request", TestGoogleAutoDetectionAsync)
+        ,("Google preserves Unicode and multiline text", TestGoogleUnicodeAndMultilineAsync)
+        ,("Google sends the API key only in its header", TestGoogleApiKeyHeaderAsync)
+        ,("Google maps an invalid API key", TestGoogleInvalidKeyAsync)
+        ,("Google maps quota and rate limits", TestGoogleQuotaAndRateLimitAsync)
+        ,("Google maps provider timeouts", TestGoogleTimeoutAsync)
+        ,("Google honors cancellation", TestGoogleCancellationAsync)
+        ,("Google maps provider 5xx failures", TestGoogleServerFailureAsync)
+        ,("Google rejects malformed responses safely", TestGoogleMalformedResponseAsync)
+        ,("Provider connection failures use safe messages", TestProviderFailureMessagesAsync)
         ,("Overlay placement remains inside work areas", TestOverlayPositioningAsync)
         ,("Region coordinates normalize safely", TestScreenRegionAsync)
         ,("OCR image fixtures decode and recognize where installed", TestOcrFixturesAsync)
@@ -102,7 +116,17 @@ internal static class Program
 
     private static Task TestDiagnosticSchemaAsync()
     {
-        var record = DiagnosticRecord.Create("chrome", CaptureMethod.UIA, true, 17, null);
+        var record = DiagnosticRecord.Create(
+            OperationType.Understand,
+            "google-cloud-translation",
+            "chrome",
+            CaptureMethod.UIA,
+            4,
+            10,
+            3,
+            17,
+            true,
+            null);
         using var document = JsonDocument.Parse(LocalDiagnosticLogger.Serialize(record));
         var propertyNames = document.RootElement
             .EnumerateObject()
@@ -111,7 +135,8 @@ internal static class Program
             .ToArray();
         var expected = new[]
         {
-            "captureMethod", "exceptionType", "latencyMs", "process", "success", "timestamp"
+            "captureLatencyMs", "captureMethod", "exceptionType", "operation", "outputLatencyMs",
+            "process", "provider", "providerLatencyMs", "success", "timestamp", "totalLatencyMs"
         };
         Equal(string.Join('|', expected), string.Join('|', propertyNames));
         return Task.CompletedTask;
@@ -121,10 +146,15 @@ internal static class Program
     {
         const string sensitiveText = "selected text must never reach a log";
         var record = DiagnosticRecord.Create(
+            OperationType.TranslateToEnglish,
+            "google-cloud-translation",
             "ms-teams",
             CaptureMethod.Clipboard,
-            false,
+            5,
+            12,
+            4,
             21,
+            false,
             new InvalidOperationException(sensitiveText));
         var json = LocalDiagnosticLogger.Serialize(record);
         False(json.Contains(sensitiveText, StringComparison.Ordinal));
@@ -142,7 +172,17 @@ internal static class Program
         {
             var logger = new LocalDiagnosticLogger(testDirectory);
             var written = await logger.WriteAsync(
-                DiagnosticRecord.Create("outlook", CaptureMethod.UIA, true, 8, null),
+                DiagnosticRecord.Create(
+                    OperationType.Understand,
+                    "test-only",
+                    "outlook",
+                    CaptureMethod.UIA,
+                    2,
+                    4,
+                    2,
+                    8,
+                    true,
+                    null),
                 CancellationToken.None);
             True(written);
             var files = Directory.GetFiles(logger.LogDirectory, "*.jsonl");
@@ -271,6 +311,79 @@ internal static class Program
         }
     }
 
+    private static async Task TestProviderCredentialIsolationAsync()
+    {
+        const string legacySecret = "legacy-provider-secret";
+        var azureDirectory = NewTestDirectory();
+        var googleDirectory = NewTestDirectory();
+        try
+        {
+            var azureSettings = new SettingsService(azureDirectory);
+            await azureSettings.SaveAsync(new AppSettings
+            {
+                TranslationProvider = new ProviderConfiguration
+                {
+                    Provider = TranslationProviderNames.Azure
+                }
+            });
+            var azureCredentials = new DpapiCredentialStore(azureDirectory);
+            await azureCredentials.SetAsync(TranslationService.LegacyApiKeyCredentialName, legacySecret);
+            var azureHandler = new StubHttpMessageHandler(request =>
+            {
+                Equal(legacySecret, request.Headers.GetValues("Ocp-Apim-Subscription-Key").Single());
+                return Task.FromResult(JsonResponse(
+                    "[{\"detectedLanguage\":{\"language\":\"en\",\"score\":1},\"translations\":[{\"text\":\"Xin chào\",\"to\":\"vi\"}]}]"));
+            });
+            var azureService = new TranslationService(
+                azureSettings,
+                azureCredentials,
+                new LanguageDetector(),
+                new HttpClient(azureHandler));
+            await azureService.TranslateAsync(new TranslationRequest
+            {
+                Text = "Hello",
+                TargetLanguage = Language.Vietnamese
+            }, CancellationToken.None);
+            Equal(
+                legacySecret,
+                await azureCredentials.GetAsync(TranslationService.GetCredentialName(TranslationProviderNames.Azure)));
+            Equal<string?>(null, await azureCredentials.GetAsync(TranslationService.LegacyApiKeyCredentialName));
+
+            var googleSettings = new SettingsService(googleDirectory);
+            await googleSettings.SaveAsync(new AppSettings
+            {
+                TranslationProvider = new ProviderConfiguration
+                {
+                    Provider = TranslationProviderNames.GoogleCloud
+                }
+            });
+            var googleCredentials = new DpapiCredentialStore(googleDirectory);
+            await googleCredentials.SetAsync(TranslationService.LegacyApiKeyCredentialName, legacySecret);
+            var requestCount = 0;
+            var googleHandler = new StubHttpMessageHandler(_ =>
+            {
+                requestCount++;
+                return Task.FromResult(GoogleResponse("Xin chào", "en"));
+            });
+            var googleService = new TranslationService(
+                googleSettings,
+                googleCredentials,
+                new LanguageDetector(),
+                new HttpClient(googleHandler));
+            var health = await googleService.TestProviderAsync(CancellationToken.None);
+            Equal("Invalid API key", health.Status);
+            Equal(0, requestCount);
+            Equal<string?>(
+                null,
+                await googleCredentials.GetAsync(TranslationService.GetCredentialName(TranslationProviderNames.GoogleCloud)));
+        }
+        finally
+        {
+            Directory.Delete(azureDirectory, recursive: true);
+            Directory.Delete(googleDirectory, recursive: true);
+        }
+    }
+
     private static Task TestLanguageDetectionAsync()
     {
         var detector = new LanguageDetector();
@@ -368,6 +481,265 @@ internal static class Program
         Equal("Hello", libreResult.Text);
     }
 
+    private static Task TestGoogleVietnameseToEnglishAsync() => TestGoogleLanguagePairAsync(
+        "Xin chào Việt Nam.",
+        Language.Vietnamese,
+        Language.English,
+        "Hello Vietnam.",
+        "vi",
+        "en");
+
+    private static Task TestGoogleEnglishToVietnameseAsync() => TestGoogleLanguagePairAsync(
+        "Hello Vietnam.",
+        Language.English,
+        Language.Vietnamese,
+        "Xin chào Việt Nam.",
+        "en",
+        "vi");
+
+    private static Task TestGoogleChineseToVietnameseAsync() => TestGoogleLanguagePairAsync(
+        "你好，越南。",
+        Language.SimplifiedChinese,
+        Language.Vietnamese,
+        "Xin chào Việt Nam.",
+        "zh-CN",
+        "vi");
+
+    private static async Task TestGoogleAutoDetectionAsync()
+    {
+        var requestCount = 0;
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requestCount++;
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            False(document.RootElement.TryGetProperty("source", out _));
+            Equal("vi", document.RootElement.GetProperty("target").GetString());
+            return GoogleResponse("Xin chào", "en");
+        });
+        var provider = CreateGoogleProvider(handler);
+        var result = await provider.TranslateAsync(new TranslationRequest
+        {
+            Text = "Hello",
+            TargetLanguage = Language.Vietnamese
+        }, CancellationToken.None);
+
+        Equal(1, requestCount);
+        Equal(Language.English, result.SourceLanguage);
+        Equal("Xin chào", result.Text);
+    }
+
+    private static async Task TestGoogleUnicodeAndMultilineAsync()
+    {
+        const string source = "Dòng một 🙂\r\n第二行 — https://example.com?q=1&x=2";
+        const string translated = "Line one 🙂\r\nSecond line — https://example.com?q=1&x=2";
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            Equal(source, document.RootElement.GetProperty("q").GetString());
+            return GoogleResponse(translated, "vi");
+        });
+        var result = await CreateGoogleProvider(handler).TranslateAsync(new TranslationRequest
+        {
+            Text = source,
+            SourceLanguage = Language.Vietnamese,
+            TargetLanguage = Language.English
+        }, CancellationToken.None);
+
+        Equal(translated, result.Text);
+    }
+
+    private static async Task TestGoogleApiKeyHeaderAsync()
+    {
+        const string apiKey = "google-test-key-never-log";
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            Equal(HttpMethod.Post, request.Method);
+            Equal(GoogleCloudTranslationProvider.Endpoint, request.RequestUri!.AbsoluteUri);
+            Equal(apiKey, request.Headers.GetValues("X-Goog-Api-Key").Single());
+            False(request.RequestUri.Query.Contains(apiKey, StringComparison.Ordinal));
+            return Task.FromResult(GoogleResponse("Xin chào", "en"));
+        });
+        var provider = new GoogleCloudTranslationProvider(
+            new HttpClient(handler),
+            apiKey,
+            new LanguageDetector());
+
+        await provider.TranslateAsync(new TranslationRequest
+        {
+            Text = "Hello",
+            TargetLanguage = Language.Vietnamese
+        }, CancellationToken.None);
+    }
+
+    private static async Task TestGoogleInvalidKeyAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(
+            "{\"error\":{\"code\":400,\"status\":\"INVALID_ARGUMENT\",\"errors\":[{\"reason\":\"keyInvalid\"}]}}",
+            HttpStatusCode.BadRequest)));
+        var provider = CreateGoogleProvider(handler);
+        await ThrowsProviderFailureAsync(
+            () => TranslateWithGoogleAsync(provider, CancellationToken.None),
+            ProviderFailure.InvalidApiKey);
+    }
+
+    private static async Task TestGoogleQuotaAndRateLimitAsync()
+    {
+        var quotaHandler = new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(
+            "{\"error\":{\"code\":403,\"errors\":[{\"reason\":\"dailyLimitExceeded\"}]}}",
+            HttpStatusCode.Forbidden)));
+        await ThrowsProviderFailureAsync(
+            () => TranslateWithGoogleAsync(CreateGoogleProvider(quotaHandler), CancellationToken.None),
+            ProviderFailure.QuotaExceeded);
+
+        var rateHandler = new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(
+            "{\"error\":{\"code\":429,\"errors\":[{\"reason\":\"userRateLimitExceeded\"}]}}",
+            HttpStatusCode.TooManyRequests)));
+        await ThrowsProviderFailureAsync(
+            () => TranslateWithGoogleAsync(CreateGoogleProvider(rateHandler), CancellationToken.None),
+            ProviderFailure.RateLimited);
+    }
+
+    private static async Task TestGoogleTimeoutAsync()
+    {
+        var handler = new StubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return GoogleResponse("unreachable", "en");
+        });
+        using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(30) };
+        var provider = new GoogleCloudTranslationProvider(httpClient, "key", new LanguageDetector());
+        var service = CreateTranslationService(provider, httpClient);
+        var health = await service.TestProviderAsync(CancellationToken.None);
+
+        False(health.IsHealthy);
+        Equal("Timeout", health.Status);
+    }
+
+    private static async Task TestGoogleCancellationAsync()
+    {
+        var handler = new StubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return GoogleResponse("unreachable", "en");
+        });
+        var provider = CreateGoogleProvider(handler);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await ThrowsAsync<OperationCanceledException>(
+            () => TranslateWithGoogleAsync(provider, cancellation.Token));
+    }
+
+    private static async Task TestGoogleServerFailureAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(
+            "{\"error\":{\"code\":503,\"status\":\"UNAVAILABLE\"}}",
+            HttpStatusCode.ServiceUnavailable)));
+        var provider = CreateGoogleProvider(handler);
+        await ThrowsProviderFailureAsync(
+            () => TranslateWithGoogleAsync(provider, CancellationToken.None),
+            ProviderFailure.ProviderUnavailable);
+    }
+
+    private static async Task TestGoogleMalformedResponseAsync()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse("{\"data\":{}")));
+        var provider = CreateGoogleProvider(handler);
+        await ThrowsProviderFailureAsync(
+            () => TranslateWithGoogleAsync(provider, CancellationToken.None),
+            ProviderFailure.ProviderUnavailable);
+    }
+
+    private static Task TestProviderFailureMessagesAsync()
+    {
+        Equal("Invalid API key", ProviderHttp.ToStatus(ProviderHttp.FromStatusCode(HttpStatusCode.Unauthorized)));
+        Equal("Permission denied", ProviderHttp.ToStatus(ProviderHttp.FromStatusCode(HttpStatusCode.Forbidden)));
+        Equal("Rate limited", ProviderHttp.ToStatus(ProviderHttp.FromStatusCode(HttpStatusCode.TooManyRequests)));
+        Equal("Provider unavailable", ProviderHttp.ToStatus(ProviderHttp.FromStatusCode(HttpStatusCode.BadGateway)));
+        Equal(
+            "Network unavailable",
+            ProviderHttp.ToStatus(ProviderHttp.FromException(
+                new HttpRequestException("sensitive transport detail"),
+                CancellationToken.None)));
+
+        try
+        {
+            ProviderHttp.ValidateEndpoint("http://provider.example/translate", "https://example.invalid");
+        }
+        catch (ProviderException exception)
+        {
+            Equal(ProviderFailure.InvalidEndpoint, exception.Failure);
+            Equal("Invalid endpoint", exception.Message);
+            return Task.CompletedTask;
+        }
+
+        throw new InvalidOperationException("Expected an invalid endpoint failure.");
+    }
+
+    private static async Task TestGoogleLanguagePairAsync(
+        string sourceText,
+        Language sourceLanguage,
+        Language targetLanguage,
+        string translatedText,
+        string expectedSourceCode,
+        string expectedTargetCode)
+    {
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            Equal(sourceText, document.RootElement.GetProperty("q").GetString());
+            Equal(expectedSourceCode, document.RootElement.GetProperty("source").GetString());
+            Equal(expectedTargetCode, document.RootElement.GetProperty("target").GetString());
+            return GoogleResponse(translatedText, expectedSourceCode);
+        });
+        var result = await CreateGoogleProvider(handler).TranslateAsync(new TranslationRequest
+        {
+            Text = sourceText,
+            SourceLanguage = sourceLanguage,
+            TargetLanguage = targetLanguage
+        }, CancellationToken.None);
+
+        Equal(translatedText, result.Text);
+        Equal(sourceLanguage, result.SourceLanguage);
+        Equal(targetLanguage, result.TargetLanguage);
+    }
+
+    private static GoogleCloudTranslationProvider CreateGoogleProvider(HttpMessageHandler handler) =>
+        new(new HttpClient(handler), "key", new LanguageDetector());
+
+    private static Task<TranslationResult> TranslateWithGoogleAsync(
+        GoogleCloudTranslationProvider provider,
+        CancellationToken cancellationToken) =>
+        provider.TranslateAsync(new TranslationRequest
+        {
+            Text = "Hello",
+            TargetLanguage = Language.Vietnamese
+        }, cancellationToken);
+
+    private static TranslationService CreateTranslationService(
+        ITranslationProvider provider,
+        HttpClient httpClient) =>
+        new(
+            new SettingsService(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))),
+            new StubCredentialStore(),
+            new LanguageDetector(),
+            httpClient,
+            provider);
+
+    private static async Task ThrowsProviderFailureAsync(Func<Task> action, ProviderFailure expected)
+    {
+        try
+        {
+            await action();
+        }
+        catch (ProviderException exception)
+        {
+            Equal(expected, exception.Failure);
+            return;
+        }
+
+        throw new InvalidOperationException($"Expected provider failure '{expected}'.");
+    }
+
     private static Task TestOverlayPositioningAsync()
     {
         var work = new PixelRect(-1920, 0, 0, 1080);
@@ -448,10 +820,24 @@ internal static class Program
         return image;
     }
 
-    private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
-    {
-        Content = new StringContent(json, Encoding.UTF8, "application/json")
-    };
+    private static HttpResponseMessage GoogleResponse(string translatedText, string detectedSourceLanguage) =>
+        JsonResponse(JsonSerializer.Serialize(new
+        {
+            data = new
+            {
+                translations = new[]
+                {
+                    new { translatedText, detectedSourceLanguage }
+                }
+            }
+        }));
+
+    private static HttpResponseMessage JsonResponse(
+        string json,
+        HttpStatusCode statusCode = HttpStatusCode.OK) => new(statusCode)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
 
     private static string NewTestDirectory()
     {
@@ -988,16 +1374,55 @@ internal static class Program
         throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
     }
 
+    private static async Task ThrowsAsync<TException>(Func<Task> action)
+        where TException : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
+    }
+
     private sealed class ClipboardOnlyTextBox : TextBox
     {
         protected override AutomationPeer? OnCreateAutomationPeer() => null;
     }
 
-    private sealed class StubHttpMessageHandler(
-        Func<HttpRequestMessage, Task<HttpResponseMessage>> responseFactory) : HttpMessageHandler
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _responseFactory;
+
+        internal StubHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> responseFactory)
+        {
+            _responseFactory = (request, _) => responseFactory(request);
+        }
+
+        internal StubHttpMessageHandler(
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responseFactory)
+        {
+            _responseFactory = responseFactory;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
-            CancellationToken cancellationToken) => responseFactory(request);
+            CancellationToken cancellationToken) => _responseFactory(request, cancellationToken);
+    }
+
+    private sealed class StubCredentialStore : ICredentialStore
+    {
+        public Task<string?> GetAsync(string name, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+
+        public Task SetAsync(string name, string secret, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task RemoveAsync(string name, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

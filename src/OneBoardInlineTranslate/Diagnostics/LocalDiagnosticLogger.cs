@@ -26,7 +26,7 @@ internal sealed class LocalDiagnosticLogger
         try
         {
             Directory.CreateDirectory(_logDirectory);
-            var path = Path.Combine(_logDirectory, $"phase0-{record.Timestamp:yyyyMMdd}.jsonl");
+            var path = Path.Combine(_logDirectory, $"operations-{record.Timestamp:yyyyMMdd}.jsonl");
             var line = Serialize(record) + Environment.NewLine;
             await File.AppendAllTextAsync(path, line, Utf8WithoutBom, cancellationToken);
             return true;

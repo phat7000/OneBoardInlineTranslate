@@ -14,7 +14,7 @@ This restores dependencies, verifies formatting, builds Release x64, and runs th
 dotnet run --project .\tests\OneBoardInlineTranslate.SmokeTests\OneBoardInlineTranslate.SmokeTests.csproj -c Release -p:Platform=x64 --no-build
 ```
 
-Coverage includes diagnostic allow-lists/redaction, no-Enter declaration, hotkeys, single instance, settings and corrupt recovery, DPAPI, language detection, fake translation, supported provider contracts, overlay placement, region coordinates, static OCR fixtures, and fake-provider stress.
+Coverage includes diagnostic allow-lists/redaction, no-Enter declaration, hotkeys, single instance, settings and corrupt recovery, DPAPI, language detection, fake translation, supported provider contracts, Google language directions and failure modes, overlay placement, region coordinates, static OCR fixtures, and fake-provider stress. Provider contract tests use fake HTTP handlers and consume no live quota.
 
 ## Clipboard integration
 

@@ -6,7 +6,7 @@ OneBoard stores non-sensitive settings, DPAPI-encrypted provider credentials, an
 
 ## Data sent to a provider
 
-When the user invokes a translation workflow, the selected text or locally extracted OCR text is sent over HTTPS to the configured Azure Translator, DeepL, or LibreTranslate-compatible endpoint. Provider policies, retention, jurisdiction, and account controls apply. OneBoard makes no provider request simply because it is running.
+When the user invokes a translation workflow, the selected text or locally extracted OCR text is sent over HTTPS to the configured Google Cloud Translation, Azure Translator, DeepL, or LibreTranslate-compatible endpoint. Provider policies, retention, jurisdiction, and account controls apply. OneBoard makes no provider request simply because it is running.
 
 ## Clipboard
 
@@ -20,7 +20,7 @@ Only the selected screen rectangle is captured. The bitmap remains in memory, is
 
 ## Logs and telemetry
 
-There is no telemetry or analytics. Local diagnostics contain timestamp, process name, operation capture method, success/failure, latency, and exception type. They exclude selected, translated, OCR, reply, and clipboard text; secrets; tokens; endpoints with embedded credentials; exception messages; and provider response bodies.
+There is no telemetry or analytics. Local diagnostics contain timestamp, process name, operation, provider, capture method, capture/provider/output/total latency, success/failure, and exception type. They exclude selected, translated, OCR, reply, and clipboard text; secrets; tokens; endpoints with embedded credentials; exception messages; and provider response bodies.
 
 ## Auto-send
 

@@ -28,6 +28,8 @@ internal sealed class LibreTranslateProvider : ITranslationProvider
 
     public string Id => "libretranslate";
 
+    public string DisplayName => TranslationProviderNames.LibreTranslate;
+
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
         CancellationToken cancellationToken)
@@ -44,7 +46,7 @@ internal sealed class LibreTranslateProvider : ITranslationProvider
 
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.PostAsJsonAsync(_endpoint, payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = document.RootElement;
@@ -77,12 +79,12 @@ internal sealed class LibreTranslateProvider : ITranslationProvider
 
     public async Task<ProviderHealth> TestAsync(CancellationToken cancellationToken)
     {
-        await TranslateAsync(new TranslationRequest
+        var result = await TranslateAsync(new TranslationRequest
         {
             Text = "Hello",
             SourceLanguage = Language.English,
             TargetLanguage = Language.Vietnamese
         }, cancellationToken);
-        return new ProviderHealth(true, Id, "Connection successful");
+        return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
     }
 }

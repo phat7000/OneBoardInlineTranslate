@@ -88,23 +88,34 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
           <TextBlock Grid.ColumnSpan="2" FontSize="17" FontWeight="SemiBold" Text="Translation provider" />
           <TextBlock Grid.Row="1" Margin="0,16,12,0" VerticalAlignment="Center" Text="Provider" />
-          <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" x:Name="ProviderCombo" />
-          <TextBlock Grid.Row="2" Margin="0,11,12,0" VerticalAlignment="Center" Text="Endpoint" />
-          <TextBox Grid.Row="2" Grid.Column="1" Margin="0,6,0,0" x:Name="EndpointBox" />
-          <TextBlock Grid.Row="3" Margin="0,11,12,0" VerticalAlignment="Center" Text="Region" />
-          <TextBox Grid.Row="3" Grid.Column="1" Margin="0,6,0,0" x:Name="RegionBox" />
-          <TextBlock Grid.Row="4" Margin="0,11,12,0" VerticalAlignment="Center" Text="API key" />
-          <PasswordBox Grid.Row="4" Grid.Column="1" Margin="0,6,0,0" MinHeight="32" Padding="8,5"
+          <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" x:Name="ProviderCombo"
+                    SelectionChanged="ProviderCombo_SelectionChanged" />
+          <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,3" TextWrapping="Wrap"
+                     Foreground="{StaticResource MutedBrush}" x:Name="ProviderDescriptionText" />
+          <TextBlock Grid.Row="3" Margin="0,11,12,0" VerticalAlignment="Center"
+                     x:Name="EndpointLabel" Text="Endpoint (optional)" />
+          <TextBox Grid.Row="3" Grid.Column="1" Margin="0,6,0,0" x:Name="EndpointBox" />
+          <TextBlock Grid.Row="4" Margin="0,11,12,0" VerticalAlignment="Center"
+                     x:Name="RegionLabel" Text="Region (optional)" />
+          <TextBox Grid.Row="4" Grid.Column="1" Margin="0,6,0,0" x:Name="RegionBox" />
+          <TextBlock Grid.Row="5" Margin="0,11,12,0" VerticalAlignment="Center"
+                     x:Name="ApiKeyLabel" Text="API key" />
+          <PasswordBox Grid.Row="5" Grid.Column="1" Margin="0,6,0,0" MinHeight="32" Padding="8,5"
                        x:Name="ApiKeyBox" AutomationProperties.Name="Translation provider API key" />
-          <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="-4,8,0,0">
-            <Button Content="Test connection" Click="TestConnection_Click" />
+          <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,5,0,0" TextWrapping="Wrap"
+                     Foreground="{StaticResource MutedBrush}" x:Name="ApiKeyHintText" />
+          <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="-4,8,0,0"
+                      x:Name="TestConnectionPanel">
+            <Button x:Name="TestConnectionButton" Content="Test connection" Click="TestConnection_Click" />
             <TextBlock x:Name="ProviderStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
                        Foreground="{StaticResource MutedBrush}" />
           </StackPanel>
-          <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Margin="0,16,0,0" TextWrapping="Wrap"
+          <TextBlock Grid.Row="8" Grid.ColumnSpan="2" Margin="0,16,0,0" TextWrapping="Wrap"
                      Foreground="{StaticResource MutedBrush}"
                      Text="Keys are protected for the current Windows user with DPAPI and are never stored in settings.json. Selected text is sent to the configured provider only when you invoke a translation action." />
         </Grid>
@@ -125,7 +136,7 @@
       <TabItem Header="About">
         <StackPanel Margin="18">
           <TextBlock FontSize="20" FontWeight="SemiBold" Text="OneBoard Inline Translate" />
-          <TextBlock Margin="0,8,0,0" Text="Version 1.0.0" />
+          <TextBlock Margin="0,8,0,0" Text="Version 1.1.0" />
           <TextBlock Margin="0,12,0,0" Text="https://github.com/phat7000/OneBoardInlineTranslate" />
           <TextBlock Margin="0,18,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
                      Text="A local-first Windows communication utility. No analytics, no translation history, and no automatic sending." />

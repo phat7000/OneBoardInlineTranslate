@@ -2,7 +2,7 @@
 
 OneBoard Inline Translate is a lightweight Windows utility for understanding and composing multilingual text without leaving the application you are using. Select text in Teams, Outlook, Zalo, a browser, or another Windows app, then use a global hotkey to translate, replace, reply, or capture an on-screen region.
 
-Version 1.0.0 supports Vietnamese, English, and Simplified Chinese. The human always performs the final send action: OneBoard never presses Enter, clicks Send, or submits a form.
+Version 1.1.0 supports Vietnamese, English, and Simplified Chinese. The human always performs the final send action: OneBoard never presses Enter, clicks Send, or submits a form.
 
 > Unsigned build - Windows SmartScreen may show a warning.
 
@@ -15,8 +15,9 @@ Version 1.0.0 supports Vietnamese, English, and Simplified Chinese. The human al
 - One-action translation and selected-text replacement.
 - Reply Mode with translation preview and explicit Insert/Copy controls.
 - Local Windows OCR for text that cannot be selected.
-- Azure Translator, DeepL, and LibreTranslate-compatible providers.
+- Google Cloud Translation, Azure Translator, DeepL, and LibreTranslate-compatible providers.
 - API keys protected for the current Windows user with DPAPI.
+- Metadata-only capture, provider, output, and total latency diagnostics.
 - No account, backend, analytics, telemetry, or translation-history database.
 
 ## Default hotkeys
@@ -39,7 +40,7 @@ Screenshots will be added to the GitHub release page. The app uses a compact whi
 
 ### Portable
 
-1. Download `OneBoardInlineTranslate-1.0.0-win-x64.zip` from Releases.
+1. Download `OneBoardInlineTranslate-1.1.0-win-x64.zip` from Releases.
 2. Extract the archive to a folder you control.
 3. Run `OneBoardInlineTranslate.exe`.
 4. Open the notification-area icon and choose **Open Settings**.
@@ -48,17 +49,18 @@ The portable build is self-contained and does not require a separate .NET instal
 
 ### Installer
 
-Run `OneBoardInlineTranslate-Setup-1.0.0-win-x64.exe`. Installation is per-user, needs no administrator rights, creates a Start Menu shortcut, and offers an optional desktop shortcut. User settings under `%LOCALAPPDATA%\OneBoardInlineTranslate` are preserved when the program is uninstalled.
+Run `OneBoardInlineTranslate-Setup-1.1.0-win-x64.exe`. Installation is per-user, needs no administrator rights, creates a Start Menu shortcut, and offers an optional desktop shortcut. User settings under `%LOCALAPPDATA%\OneBoardInlineTranslate` are preserved when the program is uninstalled.
 
 ## Configure a translation provider
 
-Open **Settings → Providers**, choose a provider, enter its supported endpoint/region fields, and enter the API key if required. Choose **Test connection**, then **Save**.
+Open **Settings → Providers**, choose a provider, enter only the fields shown for that provider, and choose **Test connection**, then **Save**.
 
+- **Google Cloud Translation:** enable the Cloud Translation API in a billed Google Cloud project, create an API key, and restrict that key to the Cloud Translation API. OneBoard uses the official Cloud Translation Basic v2 endpoint and sends the key in `X-Goog-Api-Key`, never in the URL.
 - **Azure Translator:** API key, optional Azure region, and optionally a custom resource endpoint. The public Translator endpoint is used when Endpoint is blank.
 - **DeepL:** API key and optionally a custom supported API endpoint. The Free endpoint is chosen automatically for keys ending in `:fx`.
 - **LibreTranslate:** HTTPS endpoint and optional API key. Plain HTTP is accepted only for a loopback service such as `http://localhost:5000/translate`.
 
-OneBoard uses supported HTTP APIs and does not scrape translation websites. API keys are not written to `settings.json`. See [Provider setup](docs/PROVIDERS.md) for request and privacy details.
+OneBoard uses supported HTTP APIs and does not scrape translation websites. API keys are protected with Windows DPAPI for the current user and are not written to `settings.json`. A successful provider check reports `Connected · Provider name · latency ms`. See [Provider setup](docs/PROVIDERS.md) for request, quota, and privacy details.
 
 ## Workflows
 
@@ -124,7 +126,7 @@ Development details are in [Architecture](ARCHITECTURE.md) and [Testing](docs/TE
 - **Provider unavailable:** use **Test connection** and verify endpoint, key, region, network, and provider subscription status.
 - **OCR language unavailable:** install the corresponding Windows language/OCR feature in Windows Settings. OneBoard does not silently download language packs.
 - **Elevated application:** run both applications at the same integrity level. OneBoard does not request elevation by default.
-- **SmartScreen warning:** public v1.0.0 is unsigned unless the release page explicitly states otherwise.
+- **SmartScreen warning:** release builds are unsigned unless the release page explicitly states otherwise.
 
 ## Limitations
 
@@ -133,7 +135,7 @@ Development details are in [Architecture](ARCHITECTURE.md) and [Testing](docs/TE
 - Third-party clipboard managers may ignore the Windows exclusion format.
 - Cloud-provider availability, quotas, pricing, language quality, and retention policies are controlled by the selected provider.
 - Windows OCR quality depends on the installed language pack, font, scaling, and source-image quality.
-- No automatic updater is included in v1.0.0.
+- No automatic updater is included in v1.1.0.
 
 ## License
 

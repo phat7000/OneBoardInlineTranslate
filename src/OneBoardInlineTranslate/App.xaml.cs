@@ -186,7 +186,7 @@ public partial class App : System.Windows.Application
     private static void ShowAbout()
     {
         MessageBox.Show(
-            "OneBoard Inline Translate\nVersion 1.0.0\n\nNo translation history. No telemetry. Never auto-sends.\n\nhttps://github.com/phat7000/OneBoardInlineTranslate",
+            "OneBoard Inline Translate\nVersion 1.1.0\n\nNo translation history. No telemetry. Never auto-sends.\n\nhttps://github.com/phat7000/OneBoardInlineTranslate",
             "About OneBoard Inline Translate",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

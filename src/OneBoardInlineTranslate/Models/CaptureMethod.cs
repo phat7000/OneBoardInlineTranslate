@@ -4,5 +4,6 @@ internal enum CaptureMethod
 {
     Unavailable,
     UIA,
-    Clipboard
+    Clipboard,
+    OCR
 }

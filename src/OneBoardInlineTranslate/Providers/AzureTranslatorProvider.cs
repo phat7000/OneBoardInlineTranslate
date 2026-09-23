@@ -31,13 +31,15 @@ internal sealed class AzureTranslatorProvider : ITranslationProvider
 
     public string Id => "azure-translator";
 
+    public string DisplayName => TranslationProviderNames.Azure;
+
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            throw new InvalidOperationException("Azure Translator API key is not configured.");
+            throw new ProviderException(ProviderFailure.InvalidApiKey);
         }
 
         var path = $"translate?api-version=3.0&to={Uri.EscapeDataString(request.TargetLanguage.Code)}";
@@ -57,7 +59,7 @@ internal sealed class AzureTranslatorProvider : ITranslationProvider
         message.Content = JsonContent.Create(new[] { new { Text = request.Text } });
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var item = document.RootElement[0];
@@ -82,12 +84,12 @@ internal sealed class AzureTranslatorProvider : ITranslationProvider
 
     public async Task<ProviderHealth> TestAsync(CancellationToken cancellationToken)
     {
-        await TranslateAsync(new TranslationRequest
+        var result = await TranslateAsync(new TranslationRequest
         {
             Text = "Hello",
             SourceLanguage = Language.English,
             TargetLanguage = Language.Vietnamese
         }, cancellationToken);
-        return new ProviderHealth(true, Id, "Connection successful");
+        return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
     }
 }

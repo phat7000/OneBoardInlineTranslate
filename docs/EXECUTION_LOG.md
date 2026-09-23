@@ -21,3 +21,8 @@
 - 2026-09-22: Phase 8 feasible local gate completed; release preparation committed to main and annotated v1.0.0 published. GitHub workflow verification remains an external observed-state check.
 - 2026-09-22: Release commit `10f12e8e07e683bd45db7a1c2432ab3ab733ebf8` and annotated v1.0.0 pushed. CI run 35709044755 completed successfully.
 - 2026-09-22: Release run 35709064606 completed successfully. GitHub Release 393590467 is public (not draft/prerelease) with the portable ZIP and installer EXE uploaded.
+- 2026-09-22: Focused post-v1 Phase 2 started from the clean, published v1.0.0 baseline; the proven capture/replacement core was kept out of scope.
+- 2026-09-22: Added official Google Cloud Translation Basic v2 with `X-Goog-Api-Key`, one-request source auto-detection, VI/EN/zh-Hans normalization, provider-specific DPAPI credential names, and safe provider error categories.
+- 2026-09-22: Providers settings now show only relevant fields and Test Connection reports provider name and latency. Local diagnostics now record metadata-only capture/provider/output/total timings.
+- 2026-09-22: Release x64 and formatting passed with 0 warnings/errors; default 35/35, clipboard 36/36, and cross-process 36/36 suites passed. No Google credential was configured, so the optional live billable smoke test was not run.
+- 2026-09-22: Built and inspected v1.1.0 portable ZIP (82,733,006 bytes, SHA-256 `96C494C0975B11B45D75CAFC5D04BFCD145D301E73EBC70AAC399B8B0EA317A3`) and unsigned installer (60,671,121 bytes, SHA-256 `7BC71D6BC8A31E202F1DAAD8D3B80F765EF5ABA9F269549A4F19EA900BEACF1B`). Portable ProductVersion/launch smoke passed; v1.0.0 artifacts remained intact.

@@ -60,7 +60,6 @@ Reason: This gives a small operational surface, no prerequisite .NET install, no
 
 Security/privacy impact: The application remains `asInvoker`; user settings are not removed or silently uploaded. Builds remain honestly documented as unsigned without a trusted certificate.
 
-
 ## 2026-09-22 - Defer one-action selected-text replacement enhancement
 
 Decision: Preserve the intended quick-action behavior for a future release: when the user selects only a sentence or text range and invokes a configured translate/replace action, OneBoard translates that exact selected range and replaces only that range in place. The action must never press Enter, trigger Send, submit a form, or automatically transmit the message.
@@ -70,3 +69,25 @@ Alternatives considered: Opening Reply Mode for every outbound translation; repl
 Reason: The fast workflow should remain minimal: select text, invoke the action, and get an in-place translation without extra confirmation steps. Reply Mode remains a separate workflow for understanding an incoming message and composing a response. This enhancement is intentionally deferred until after more real-world usage of v1.x.
 
 Security/privacy impact: Reuse the existing foreground validation, transactional clipboard restoration, selected-range-only replacement, and no-auto-send invariants. If the original destination cannot be validated safely, abort or fall back to showing/copying the translated text rather than injecting into an uncertain target.
+
+## 2026-09-22 - Add Google Cloud Translation as a focused v1.1 provider
+
+Decision: Add the official Cloud Translation Basic API v2 contract behind the existing `ITranslationProvider` abstraction. Authenticate with `X-Goog-Api-Key`, keep the endpoint fixed, and omit the source field when provider-native detection is needed.
+
+This supersedes only the v1.0 decision to stop at three production provider contracts; the supported-API, no-scraping, provider-neutral, and no-LLM constraints remain in force.
+
+Alternatives considered: Google service-account/OAuth integration, a separate detect-language request, an unofficial Google Translate endpoint, browser scraping, or an LLM translation path.
+
+Reason: Basic v2 provides a small supported one-request translation contract that fits the existing provider architecture and fast hotkey path without new dependencies or AI behavior.
+
+Security/privacy impact: The key remains DPAPI-protected per Windows user, never enters a URL/settings/log, and text is transmitted only for an invoked translation. Error payloads are reduced to allow-listed health categories.
+
+## 2026-09-22 - Keep performance diagnostics local and metadata-only
+
+Decision: Record capture, provider, output, and total operation latency in the existing local JSON Lines diagnostics, together with operation/provider/capture method/success/exception type.
+
+Alternatives considered: Telemetry, a persistent performance dashboard, content-correlated traces, or no stage timing.
+
+Reason: Stage timing makes real-world latency diagnosable without adding UI weight or a remote analytics system.
+
+Security/privacy impact: Records contain no captured, translated, reply, OCR, or clipboard text; no endpoint, key, exception message, response body, or stack trace is stored.
