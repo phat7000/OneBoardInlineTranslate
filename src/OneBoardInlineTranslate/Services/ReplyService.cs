@@ -7,7 +7,8 @@ namespace OneBoardInlineTranslate.Services;
 internal sealed class ReplyService(
     ITranslationService translation,
     IClipboardService clipboard,
-    TextReplacementService replacement)
+    TextReplacementService replacement,
+    ISettingsService settings)
 {
     internal void Open(
         ForegroundContext context,
@@ -22,7 +23,8 @@ internal sealed class ReplyService(
             preferredLanguage,
             translation,
             clipboard,
-            replacement);
+            replacement,
+            settings);
         window.Show();
         window.Activate();
     }

@@ -1,27 +1,27 @@
 # Privacy
 
-## Data stored locally
+## Stored locally
 
-OneBoard stores non-sensitive settings, DPAPI-encrypted provider credentials, and metadata-only diagnostic logs under `%LOCALAPPDATA%\OneBoardInlineTranslate`. Translation history is not implemented and text content is not persisted.
+OneBoard stores non-sensitive settings, provider language metadata, local model/runtime files explicitly downloaded by the user, current-user DPAPI-encrypted credentials, and metadata-only diagnostics beneath `%LOCALAPPDATA%\OneBoardInlineTranslate`. Translation history and telemetry are not implemented.
 
-## Data sent to a provider
+## Cloud Translation
 
-When the user invokes a translation workflow, the selected text or locally extracted OCR text is sent over HTTPS to the configured Google Cloud Translation, Azure Translator, DeepL, or LibreTranslate-compatible endpoint. Provider policies, retention, jurisdiction, and account controls apply. OneBoard makes no provider request simply because it is running.
+When the user invokes translation with Google Cloud Translation, Azure Translator, DeepL, LibreTranslate, TranslatePlus, or Langbly selected, the selected text—or locally extracted OCR text—is sent to that configured provider. The provider's privacy, retention, account, region, and jurisdiction policies apply. Merely running OneBoard causes no content request.
 
-## Clipboard
+## Local Translation
 
-Fallback capture and replacement temporarily use the Windows clipboard. OneBoard first creates a fail-closed multi-format snapshot, excludes temporary data from Windows Clipboard History and Cloud Clipboard monitoring where supported, and restores the original clipboard. Third-party clipboard managers may ignore the Windows exclusion convention.
+Translation text remains on-device. It passes from the WPF process to a private local worker through anonymous standard-input/output pipes. It is not written to disk or placed in process arguments. The only Local-mode network operations are explicit downloads of public runtime/model payloads; downloads contain no user text.
 
-An explicit **Copy** action intentionally leaves the requested output on the clipboard, while still applying the Windows monitoring exclusion format.
+## Clipboard and OCR
 
-## OCR
+Fallback capture/replacement temporarily uses the Windows clipboard after creating a fail-closed multi-format snapshot. Temporary content is marked for Windows Clipboard History/Cloud Clipboard exclusion where supported, then the previous clipboard is restored. Third-party clipboard managers may ignore the convention. An explicit Copy action intentionally leaves output on the clipboard.
 
-Only the selected screen rectangle is captured. The bitmap remains in memory, is processed by Windows OCR locally, is never transmitted, and is never written to disk during normal operation. Only extracted text is eligible for translation after the OCR step.
+Only the selected screen rectangle is captured. Pixels stay in memory, are recognized with Windows OCR, and are neither saved nor transmitted. Only the extracted text may be translated afterward.
 
-## Logs and telemetry
+## Diagnostics
 
-There is no telemetry or analytics. Local diagnostics contain timestamp, process name, operation, provider, capture method, capture/provider/output/total latency, success/failure, and exception type. They exclude selected, translated, OCR, reply, and clipboard text; secrets; tokens; endpoints with embedded credentials; exception messages; and provider response bodies.
+Local diagnostic fields are allow-listed: timestamp, process name, operation, provider, capture method, stage timings, success, and exception type. They exclude selected/translated/reply/OCR/clipboard text, screenshots, credentials, tokens, response bodies, exception messages, and stack traces.
 
-## Auto-send
+## Sending
 
-OneBoard never sends a message or email. It never presses Enter or Ctrl+Enter, clicks Send, invokes a submit API, or submits a form. The user performs the final send action.
+OneBoard never presses Enter or Ctrl+Enter, clicks Send, calls a target-app submit API, or submits a form. The user always performs the final send action.

@@ -28,9 +28,14 @@ internal static class ProviderHttp
     internal static Language ResolveLanguage(string? code, ILanguageDetector detector, string originalText) =>
         string.IsNullOrWhiteSpace(code)
             ? detector.Detect(originalText)
-            : code.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
-                ? Language.SimplifiedChinese
-                : Language.FromCode(code);
+            : LanguageCatalog.Resolve(code);
+
+    internal static IReadOnlyList<Language> DistinctLanguages(IEnumerable<Language> languages) => languages
+        .Where(language => language.Code != "und" && language.Code != "auto")
+        .GroupBy(language => language.Code, StringComparer.OrdinalIgnoreCase)
+        .Select(group => group.First())
+        .OrderBy(language => language.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
 
     internal static async Task EnsureSuccessAsync(
         HttpResponseMessage response,

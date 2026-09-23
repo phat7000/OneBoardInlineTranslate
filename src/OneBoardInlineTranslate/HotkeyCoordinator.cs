@@ -154,9 +154,9 @@ internal sealed class HotkeyCoordinator : IDisposable
 
         var target = operation switch
         {
-            OperationType.TranslateToEnglish => Language.English,
-            OperationType.TranslateToChinese => Language.SimplifiedChinese,
-            _ => Language.FromCode(_settings.Current.PreferredLanguage)
+            OperationType.TranslateToEnglish => LanguageCatalog.Resolve(_settings.Current.QuickTarget1),
+            OperationType.TranslateToChinese => LanguageCatalog.Resolve(_settings.Current.QuickTarget2),
+            _ => LanguageCatalog.Resolve(_settings.Current.PreferredLanguage)
         };
         TranslationResult translation;
         var providerStopwatch = Stopwatch.StartNew();
@@ -223,7 +223,10 @@ internal sealed class HotkeyCoordinator : IDisposable
             cancellationToken);
         if (replacement.Success)
         {
-            _overlay.ShowMessage(context, "Translation inserted", "Selected text was replaced. Nothing was sent.");
+            if (ResultWindowPolicy.ShowQuickReplacementConfirmation(_settings.Current.ResultWindowMode))
+            {
+                _overlay.ShowMessage(context, "Translation inserted", "Selected text was replaced. Nothing was sent.");
+            }
         }
         else
         {
@@ -250,7 +253,7 @@ internal sealed class HotkeyCoordinator : IDisposable
         var text = await _ocr.RecognizeAsync(bitmap, cancellationToken);
         timing.CaptureMethod = CaptureMethod.OCR;
         timing.CaptureLatencyMilliseconds = captureStopwatch.ElapsedMilliseconds;
-        var target = Language.FromCode(_settings.Current.PreferredLanguage);
+        var target = LanguageCatalog.Resolve(_settings.Current.PreferredLanguage);
         TranslationResult result;
         var providerStopwatch = Stopwatch.StartNew();
         try

@@ -1,144 +1,106 @@
 # OneBoard Inline Translate
 
-OneBoard Inline Translate is a lightweight Windows utility for understanding and composing multilingual text without leaving the application you are using. Select text in Teams, Outlook, Zalo, a browser, or another Windows app, then use a global hotkey to translate, replace, reply, or capture an on-screen region.
+OneBoard Inline Translate 1.2.0 is a compact Windows utility for translating selected text without leaving the app you are using. It preserves the validated selected-range capture/replacement workflow and never presses Enter, clicks Send, or submits a form.
 
-Version 1.1.0 supports Vietnamese, English, and Simplified Chinese. The human always performs the final send action: OneBoard never presses Enter, clicks Send, or submits a form.
+> Builds are currently unsigned, so Windows SmartScreen may show a warning.
 
-> Unsigned build - Windows SmartScreen may show a warning.
+## Highlights
 
-## Key features
-
-- UI Automation-first selected-text capture with a transactional clipboard fallback.
-- Exact clipboard restoration, including multiple clipboard formats.
-- Cloud Clipboard and Clipboard History exclusion for temporary clipboard data.
-- Non-activating compact translation overlay.
-- One-action translation and selected-text replacement.
-- Reply Mode with translation preview and explicit Insert/Copy controls.
-- Local Windows OCR for text that cannot be selected.
-- Google Cloud Translation, Azure Translator, DeepL, and LibreTranslate-compatible providers.
-- API keys protected for the current Windows user with DPAPI.
-- Metadata-only capture, provider, output, and total latency diagnostics.
-- No account, backend, analytics, telemetry, or translation-history database.
+- Searchable, provider-aware language catalog with Vietnamese, English, and Chinese Simplified first, recent choices next, then the remaining languages alphabetically.
+- Configurable Quick Target 1 (`Alt+E` by default) and Quick Target 2 (`Alt+C` by default).
+- Google Cloud Translation, Azure Translator, DeepL, LibreTranslate, TranslatePlus v2, Langbly Global/EU, and optional offline Local Translation.
+- On-demand, SHA-256-verified local OPUS-MT models powered by a private CTranslate2 runtime—no Ollama, LLM, Python installation, or user-managed server.
+- Popup, reusable Pinned, and Hidden result modes. Hidden suppresses successful quick-replace notices while Understand still shows a small result.
+- Modern compact Settings, Reply Mode, result surface, tray, executable, and installer using the OneBoard icon.
+- UI Automation-first selection capture, transactional multi-format clipboard fallback/restoration, foreground validation, and no-send guarantees.
+- Reply Mode with explicit preview and Insert/Copy; local in-memory Windows OCR; DPAPI-protected credentials; metadata-only diagnostics.
 
 ## Default hotkeys
 
 | Hotkey | Action |
 |---|---|
-| `Alt+Q` | Understand selected text in your preferred language |
-| `Alt+E` | Translate selected text to English and replace the selection |
-| `Alt+C` | Translate selected text to Simplified Chinese and replace the selection |
-| `Alt+R` | Open Reply Mode for the selected incoming message |
-| `Alt+Shift+Q` | Select a screen region, OCR it locally, then translate the extracted text |
+| `Alt+Q` | Understand selected text in the preferred language |
+| `Alt+E` | Translate and replace with Quick Target 1 (default: English) |
+| `Alt+C` | Translate and replace with Quick Target 2 (default: Chinese Simplified) |
+| `Alt+R` | Open Reply Mode |
+| `Alt+Shift+Q` | Select a screen region, OCR locally, then translate |
 
-Hotkeys are configurable in Settings. A collision disables only the unavailable binding; the rest of the app continues running.
+Hotkeys and both quick target languages are configurable. Existing saved Alt+E/Alt+C settings migrate without semantic changes.
 
-## Screenshots
+## Install
 
-Screenshots will be added to the GitHub release page. The app uses a compact white Windows 11-inspired overlay and a small tabbed Settings window rather than a dashboard.
+- Portable: extract `OneBoardInlineTranslate-1.2.0-win-x64.zip`, then run `OneBoardInlineTranslate.exe`.
+- Installer: run `OneBoardInlineTranslate-Setup-1.2.0-win-x64.exe`. It installs per user without administrator rights and offers an optional desktop shortcut.
 
-## Install or run portable
+Both artifacts are self-contained. Settings and downloaded local models live beneath `%LOCALAPPDATA%\OneBoardInlineTranslate` and remain separate from the app package.
 
-### Portable
+## Configure translation
 
-1. Download `OneBoardInlineTranslate-1.1.0-win-x64.zip` from Releases.
-2. Extract the archive to a folder you control.
-3. Run `OneBoardInlineTranslate.exe`.
-4. Open the notification-area icon and choose **Open Settings**.
+Open **Settings → Providers**, choose a provider, enter only the fields shown, and use **Test connection**. A successful check reports `Connected · Provider · latency ms`. Real keys are protected with DPAPI and never enter `settings.json`, source, diagnostics, or URLs.
 
-The portable build is self-contained and does not require a separate .NET installation.
+- Google Cloud Translation: fixed official Basic v2 endpoint; `X-Goog-Api-Key`.
+- Azure Translator: API key, optional resource region, and optional advanced endpoint.
+- DeepL: API key; Free/Pro endpoint inferred from the key unless overridden.
+- LibreTranslate: complete `/translate` endpoint; key optional where supported. Plain HTTP is accepted only for loopback.
+- TranslatePlus: fixed official v2 endpoint; `X-API-KEY`.
+- Langbly: managed Global or EU endpoint; `X-API-Key`; Custom exposes a base endpoint.
+- Local Translation: no key and no cloud fallback. Install only the directions you need in **Settings → Local Translation**.
 
-### Installer
+Provider language metadata is fetched from official capability endpoints where available and cached for 24 hours. **Refresh languages** reloads it. Known unsupported target requests are blocked before translation.
 
-Run `OneBoardInlineTranslate-Setup-1.1.0-win-x64.exe`. Installation is per-user, needs no administrator rights, creates a Start Menu shortcut, and offers an optional desktop shortcut. User settings under `%LOCALAPPDATA%\OneBoardInlineTranslate` are preserved when the program is uninstalled.
+See [provider setup](docs/PROVIDERS.md), [language behavior](docs/LANGUAGES.md), and [local engine evaluation](docs/LOCAL_TRANSLATION_EVALUATION.md).
 
-## Configure a translation provider
+## Local Translation
 
-Open **Settings → Providers**, choose a provider, enter only the fields shown for that provider, and choose **Test connection**, then **Save**.
+The first model download also installs a private runtime under `%LOCALAPPDATA%\OneBoardInlineTranslate\models\_runtime`. Downloads use HTTPS, temporary files, exact size and SHA-256 verification, safe archive extraction, and atomic activation.
 
-- **Google Cloud Translation:** enable the Cloud Translation API in a billed Google Cloud project, create an API key, and restrict that key to the Cloud Translation API. OneBoard uses the official Cloud Translation Basic v2 endpoint and sends the key in `X-Goog-Api-Key`, never in the URL.
-- **Azure Translator:** API key, optional Azure region, and optionally a custom resource endpoint. The public Translator endpoint is used when Endpoint is blank.
-- **DeepL:** API key and optionally a custom supported API endpoint. The Free endpoint is chosen automatically for keys ending in `:fx`.
-- **LibreTranslate:** HTTPS endpoint and optional API key. Plain HTTP is accepted only for a loopback service such as `http://localhost:5000/translate`.
+Initial directions:
 
-OneBoard uses supported HTTP APIs and does not scrape translation websites. API keys are protected with Windows DPAPI for the current user and are not written to `settings.json`. A successful provider check reports `Connected · Provider name · latency ms`. See [Provider setup](docs/PROVIDERS.md) for request, quota, and privacy details.
+- Vietnamese → English
+- English → Vietnamese
+- English → Chinese Simplified
+- Chinese Simplified → English
+- Vietnamese ↔ Chinese Simplified through English when both required legs are installed
 
-## Workflows
+The base application contains no translation models. Local mode never silently calls a cloud provider. See the measured sizes, latency, memory, quality samples, licenses, and tradeoffs in [docs/LOCAL_TRANSLATION_EVALUATION.md](docs/LOCAL_TRANSLATION_EVALUATION.md).
 
-### Understand selected text
+## Result modes
 
-Select text and press `Alt+Q`. OneBoard detects the source language, sends the text to your configured translation provider, and displays the original and translation in a non-activating overlay.
+- Popup: compact non-activating result with Auto/Small/Medium/Large/Custom sizes and monitor-clamped placement.
+- Pinned: one movable/resizable panel reused for every result; size, position, and monitor are remembered and recovered if a monitor disappears.
+- Hidden: successful quick replacement is silent. Errors and unsafe replacement results remain visible; Understand/OCR still show the smallest result surface.
 
-### Translate and replace
+Details are in [docs/UX.md](docs/UX.md).
 
-Select editable text and press `Alt+E` or `Alt+C`. OneBoard captures and translates the selection, revalidates the original foreground window, pastes only the translated selection, restores your clipboard, and does not send.
+## Privacy and safety
 
-### Reply Mode
+- Cloud mode sends selected or OCR-extracted text only to the configured provider after an explicit action.
+- Local Translation keeps text on-device; only requested runtime/model downloads use the network.
+- Screenshots are processed locally in memory and are not saved.
+- Translation history and telemetry are not implemented.
+- Diagnostics contain timing and operation metadata, never message, reply, OCR, clipboard, response-body, endpoint-secret, or credential content.
+- Replacement revalidates the original foreground window, replaces only the selected range, restores the clipboard, and never sends.
 
-Select an incoming message and press `Alt+R`. Review the preferred-language understanding, write your reply, translate it back to the detected incoming language, and inspect the final result. **Insert** revalidates and returns to the original window; when that cannot be done safely, the reply is copied instead. Nothing is sent automatically.
+Read [Privacy](docs/PRIVACY.md) and [Security](docs/SECURITY.md).
 
-### OCR region translation
+## Requirements and limitations
 
-Press `Alt+Shift+Q`, drag around on-screen text, and release. Escape cancels. The selected pixels are captured in memory, recognized by Windows OCR locally, disposed without being written to disk, and only the extracted text is sent to the configured translation provider.
+- Windows 10 build 19041 or later, or Windows 11; x64.
+- OneBoard and the target application must normally run at the same integrity level.
+- Windows OCR requires the corresponding installed Windows language pack.
+- Provider availability, pricing, quotas, quality, retention, and supported languages remain provider-controlled.
+- Local model quality is suitable for short practical communication but is below the best cloud systems, especially for pivot translation.
+- No automatic updater or trusted code signature is included in 1.2.0.
 
-## Privacy design
+## Build and test
 
-- Translation history: off and not stored.
-- Telemetry and analytics: not implemented.
-- Diagnostic logs: local, metadata-only, and exclude captured, translated, OCR, reply, clipboard, and credential content.
-- Temporary clipboard values: excluded from Windows clipboard monitoring/history where supported, then the previous multi-format clipboard is restored.
-- Cloud translation: selected or OCR-extracted text is transmitted to the provider you configure when you invoke a translation workflow.
-- Screenshots: processed locally and never sent to a provider or saved during normal operation.
-- Auto-send: never.
-
-Read [Privacy](docs/PRIVACY.md) and [Security](docs/SECURITY.md) for the full model.
-
-## System requirements
-
-- Windows 10 version 2004 (build 19041) or newer, or Windows 11.
-- x64 processor and operating system.
-- Target application at the same Windows integrity level as OneBoard.
-- A configured translation provider for production translation.
-- Installed Windows OCR language packs for the languages you want to recognize.
-
-OneBoard intentionally runs with `asInvoker`. Windows UIPI can prevent an unelevated OneBoard process from interacting with an elevated target application.
-
-## Build from source
-
-Prerequisites: Windows x64, .NET 10 SDK, and optionally Inno Setup 6 for the installer.
+Prerequisites: Windows x64, .NET 10 SDK, and Inno Setup 6 for the installer.
 
 ```powershell
 .\scripts\Build-Release.ps1
-```
-
-To build both release artifacts:
-
-```powershell
 .\scripts\Package-Release.ps1
 ```
 
-Development details are in [Architecture](ARCHITECTURE.md) and [Testing](docs/TESTING.md).
+The release gate verifies formatting, Release x64 compilation, provider contracts, settings migration, language capabilities, local model security/routing, result modes, privacy invariants, icon integration, clipboard integration, and cross-process replacement. See [docs/TESTING.md](docs/TESTING.md).
 
-## Troubleshooting
-
-- **A hotkey does nothing:** open the tray menu and Settings. Another application may own that binding; choose a different combination and save.
-- **No selected text:** some secure/password controls intentionally deny UI Automation and copy access. Select ordinary text and retry.
-- **Clipboard is busy:** retry after closing software that continuously owns the clipboard. OneBoard aborts rather than overwriting a clipboard it cannot snapshot safely.
-- **Provider unavailable:** use **Test connection** and verify endpoint, key, region, network, and provider subscription status.
-- **OCR language unavailable:** install the corresponding Windows language/OCR feature in Windows Settings. OneBoard does not silently download language packs.
-- **Elevated application:** run both applications at the same integrity level. OneBoard does not request elevation by default.
-- **SmartScreen warning:** release builds are unsigned unless the release page explicitly states otherwise.
-
-## Limitations
-
-- Input injection is restricted by Windows UIPI and enterprise endpoint policies.
-- Selection fidelity depends on each target application's UI Automation and clipboard behavior.
-- Third-party clipboard managers may ignore the Windows exclusion format.
-- Cloud-provider availability, quotas, pricing, language quality, and retention policies are controlled by the selected provider.
-- Windows OCR quality depends on the installed language pack, font, scaling, and source-image quality.
-- No automatic updater is included in v1.1.0.
-
-## License
-
-OneBoard Inline Translate is available under the [MIT License](LICENSE). See [Third-party notices](THIRD_PARTY_NOTICES.md).
-
-Repository: https://github.com/phat7000/OneBoardInlineTranslate
+OneBoard Inline Translate is MIT-licensed. Local runtime/model components retain their own licenses and notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

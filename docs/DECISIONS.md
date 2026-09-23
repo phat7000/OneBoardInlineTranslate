@@ -91,3 +91,37 @@ Alternatives considered: Telemetry, a persistent performance dashboard, content-
 Reason: Stage timing makes real-world latency diagnosable without adding UI weight or a remote analytics system.
 
 Security/privacy impact: Records contain no captured, translated, reply, OCR, or clipboard text; no endpoint, key, exception message, response body, or stack trace is stored.
+
+## 2026-09-23 - Use provider capabilities with a canonical catalog
+
+Decision: Keep canonical BCP-47-like IDs internally, normalize provider aliases at boundaries, query official capability APIs where available, and cache non-sensitive metadata for 24 hours.
+
+Reason: A fixed three-language list was inaccurate, while assuming one universal provider list would allow preventable failures. A broad fallback keeps setup usable when metadata is temporarily unavailable.
+
+Security/privacy impact: Capability calls carry no translation text. Known unsupported targets are rejected before a content request.
+
+## 2026-09-23 - Select CTranslate2 with on-demand OPUS-MT direction packages
+
+Decision: Use a private Python embeddable runtime containing CTranslate2 and SentencePiece, plus verified Argos-compatible OPUS-MT packages downloaded per direction. Do not add Ollama, a general LLM, or a user-configured server.
+
+Alternatives considered: Bergamot/Marian native distribution, ONNX Runtime conversion/generation, full Argos dependency stack, and local LLM runtimes.
+
+Reason: It produced the smallest maintainable Windows path that met required VI/EN/ZH coverage and measured interactive CPU latency while keeping the base application model-free.
+
+Security/privacy impact: Local text remains on-device; downloads are manifest-pinned by size/hash and safely activated; Local never falls back to cloud.
+
+## 2026-09-23 - Reuse one result window across Popup, Pinned, and Hidden modes
+
+Decision: Adapt the existing overlay rather than create separate result-window implementations. Popup remains non-activating/transient; Pinned changes the same native window to a persistent movable panel; Hidden suppresses only successful quick-replace confirmation.
+
+Reason: One rendering path reduces visual inconsistency and resource churn. Explicit result operations remain visible even in Hidden mode.
+
+Security/privacy impact: Hidden does not hide errors or unsafe replacement; non-activating Popup preserves source focus; bounds recovery prevents an inaccessible off-screen panel.
+
+## 2026-09-23 - Keep WPF and build a compact native design system
+
+Decision: Add small ResourceDictionary-style application resources and a left-navigation Settings layout without a third-party UI framework.
+
+Reason: Native WPF controls preserve keyboard/accessibility behavior and avoid package/startup overhead while materially improving the most frequently seen surfaces.
+
+Security/privacy impact: No web view, remote UI asset, analytics dependency, or expanded runtime trust boundary was introduced.

@@ -92,4 +92,27 @@ internal sealed class AzureTranslatorProvider : ITranslationProvider
         }, cancellationToken);
         return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
     }
+
+    public async Task<ProviderLanguageCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken)
+    {
+        var uri = new Uri(_endpoint.ToString().TrimEnd('/') + "/languages?api-version=3.0&scope=translation");
+        using var response = await _httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var languages = document.RootElement.GetProperty("translation").EnumerateObject()
+                .Select(item => LanguageCatalog.Resolve(
+                    item.Name,
+                    item.Value.TryGetProperty("name", out var name) ? name.GetString() : null,
+                    item.Value.TryGetProperty("nativeName", out var native) ? native.GetString() : null));
+            var normalized = ProviderHttp.DistinctLanguages(languages);
+            return new ProviderLanguageCapabilities(Id, normalized, normalized, DateTimeOffset.UtcNow);
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            throw new ProviderException(ProviderFailure.ProviderUnavailable);
+        }
+    }
 }

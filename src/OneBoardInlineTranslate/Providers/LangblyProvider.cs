@@ -8,79 +8,83 @@ using OneBoardInlineTranslate.Services;
 
 namespace OneBoardInlineTranslate.Providers;
 
-internal sealed class GoogleCloudTranslationProvider : ITranslationProvider
+internal sealed class LangblyProvider : ITranslationProvider
 {
-    internal const string Endpoint = "https://translation.googleapis.com/language/translate/v2";
+    internal const string GlobalEndpoint = "https://api.langbly.com";
+    internal const string EuEndpoint = "https://eu.langbly.com";
+    internal const string TranslatePath = "/language/translate/v2";
+    internal const string LanguagesPath = "/language/translate/v2/languages";
 
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
+    private readonly Uri _baseEndpoint;
     private readonly ILanguageDetector _detector;
 
-    internal GoogleCloudTranslationProvider(
+    internal LangblyProvider(
         HttpClient httpClient,
         string apiKey,
+        string region,
+        string customEndpoint,
         ILanguageDetector detector)
     {
         _httpClient = httpClient;
         _apiKey = apiKey;
+        _baseEndpoint = ResolveEndpoint(region, customEndpoint);
         _detector = detector;
     }
 
-    public string Id => "google-cloud-translation";
+    public string Id => "langbly";
 
-    public string DisplayName => TranslationProviderNames.GoogleCloud;
+    public string DisplayName => TranslationProviderNames.Langbly;
+
+    internal Uri TranslateEndpoint => new(_baseEndpoint.ToString().TrimEnd('/') + TranslatePath);
+
+    internal Uri LanguagesEndpoint => new(_baseEndpoint.ToString().TrimEnd('/') + LanguagesPath);
 
     public async Task<TranslationResult> TranslateAsync(
         TranslationRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
-        {
-            throw new ProviderException(ProviderFailure.InvalidApiKey);
-        }
-
+        EnsureApiKey();
         var payload = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["q"] = request.Text,
-            ["target"] = ToGoogleCode(request.TargetLanguage),
+            ["target"] = ProviderLanguageCodes.ToLangbly(request.TargetLanguage),
             ["format"] = "text"
         };
         if (request.SourceLanguage is not null)
         {
-            payload["source"] = ToGoogleCode(request.SourceLanguage);
+            payload["source"] = ProviderLanguageCodes.ToLangbly(request.SourceLanguage);
         }
 
-        using var message = new HttpRequestMessage(HttpMethod.Post, Endpoint);
-        message.Headers.Add("X-Goog-Api-Key", _apiKey);
+        using var message = new HttpRequestMessage(HttpMethod.Post, TranslateEndpoint);
+        message.Headers.Add("X-API-Key", _apiKey);
         message.Content = JsonContent.Create(payload);
-
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.SendAsync(
             message,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
+        ThrowIfInvalidCredential(response);
         await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: true, cancellationToken);
-
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var translation = document.RootElement
-                .GetProperty("data")
-                .GetProperty("translations")[0];
+            var translation = document.RootElement.GetProperty("data").GetProperty("translations")[0];
             var translated = translation.GetProperty("translatedText").GetString();
             if (string.IsNullOrEmpty(translated))
             {
                 throw new ProviderException(ProviderFailure.ProviderUnavailable);
             }
 
-            var detectedCode = translation.TryGetProperty("detectedSourceLanguage", out var detected)
+            var source = translation.TryGetProperty("detectedSourceLanguage", out var detected)
                 ? detected.GetString()
                 : request.SourceLanguage?.Code;
             return new TranslationResult
             {
                 Text = WebUtility.HtmlDecode(translated),
-                SourceLanguage = ProviderHttp.ResolveLanguage(detectedCode, _detector, request.Text),
+                SourceLanguage = ProviderHttp.ResolveLanguage(source, _detector, request.Text),
                 TargetLanguage = request.TargetLanguage,
                 ProviderId = Id,
                 Latency = stopwatch.Elapsed
@@ -109,17 +113,14 @@ internal sealed class GoogleCloudTranslationProvider : ITranslationProvider
 
     public async Task<ProviderLanguageCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
-        {
-            throw new ProviderException(ProviderFailure.InvalidApiKey);
-        }
-
-        using var message = new HttpRequestMessage(HttpMethod.Get, Endpoint + "/languages?target=en");
-        message.Headers.Add("X-Goog-Api-Key", _apiKey);
+        EnsureApiKey();
+        using var message = new HttpRequestMessage(HttpMethod.Get, LanguagesEndpoint);
+        message.Headers.Add("X-API-Key", _apiKey);
         using var response = await _httpClient.SendAsync(
             message,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
+        ThrowIfInvalidCredential(response);
         await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: true, cancellationToken);
         try
         {
@@ -129,8 +130,7 @@ internal sealed class GoogleCloudTranslationProvider : ITranslationProvider
                 .EnumerateArray()
                 .Select(item => LanguageCatalog.Resolve(
                     item.GetProperty("language").GetString() ?? string.Empty,
-                    item.TryGetProperty("name", out var name) ? name.GetString() : null))
-                .ToArray();
+                    item.TryGetProperty("name", out var name) ? name.GetString() : null));
             var normalized = ProviderHttp.DistinctLanguages(languages);
             return new ProviderLanguageCapabilities(Id, normalized, normalized, DateTimeOffset.UtcNow);
         }
@@ -140,5 +140,26 @@ internal sealed class GoogleCloudTranslationProvider : ITranslationProvider
         }
     }
 
-    private static string ToGoogleCode(Language language) => ProviderLanguageCodes.ToGoogle(language);
+    internal static Uri ResolveEndpoint(string region, string customEndpoint) => region.Trim() switch
+    {
+        "EU" => new Uri(EuEndpoint),
+        "Custom" => ProviderHttp.ValidateEndpoint(customEndpoint, GlobalEndpoint),
+        _ => new Uri(GlobalEndpoint)
+    };
+
+    private void EnsureApiKey()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            throw new ProviderException(ProviderFailure.InvalidApiKey);
+        }
+    }
+
+    private static void ThrowIfInvalidCredential(HttpResponseMessage response)
+    {
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            throw new ProviderException(ProviderFailure.InvalidApiKey);
+        }
+    }
 }

@@ -34,7 +34,7 @@ internal sealed class TrayIconService : IDisposable
 
         _icon = new Forms.NotifyIcon
         {
-            Icon = Drawing.SystemIcons.Application,
+            Icon = LoadApplicationIcon(),
             Text = "OneBoard Inline Translate - Running",
             ContextMenuStrip = menu,
             Visible = true
@@ -71,5 +71,13 @@ internal sealed class TrayIconService : IDisposable
     {
         _icon.Visible = false;
         _icon.Dispose();
+    }
+
+    private static Drawing.Icon LoadApplicationIcon()
+    {
+        var executable = Environment.ProcessPath;
+        return !string.IsNullOrWhiteSpace(executable)
+            ? Drawing.Icon.ExtractAssociatedIcon(executable) ?? Drawing.SystemIcons.Application
+            : Drawing.SystemIcons.Application;
     }
 }

@@ -1,5 +1,5 @@
 #define AppName "OneBoard Inline Translate"
-#define AppVersion "1.1.0"
+#define AppVersion "1.2.0"
 #define AppPublisher "OneBoard"
 #define AppUrl "https://github.com/phat7000/OneBoardInlineTranslate"
 #ifndef PublishDir
@@ -24,12 +24,13 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=OneBoardInlineTranslate-Setup-1.1.0-win-x64
+OutputBaseFilename=OneBoardInlineTranslate-Setup-1.2.0-win-x64
+SetupIconFile=..\src\OneBoardInlineTranslate\Assets\OneBoardInlineTranslate.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\OneBoardInlineTranslate.exe
-VersionInfoVersion=1.1.0.0
+VersionInfoVersion=1.2.0.0
 VersionInfoCompany=OneBoard
 VersionInfoDescription=OneBoard Inline Translate Setup
 VersionInfoProductName=OneBoard Inline Translate
@@ -44,8 +45,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{userprograms}\OneBoard Inline Translate"; Filename: "{app}\OneBoardInlineTranslate.exe"
-Name: "{userdesktop}\OneBoard Inline Translate"; Filename: "{app}\OneBoardInlineTranslate.exe"; Tasks: desktopicon
+Name: "{userprograms}\OneBoard Inline Translate"; Filename: "{app}\OneBoardInlineTranslate.exe"; IconFilename: "{app}\OneBoardInlineTranslate.exe"
+Name: "{userdesktop}\OneBoard Inline Translate"; Filename: "{app}\OneBoardInlineTranslate.exe"; IconFilename: "{app}\OneBoardInlineTranslate.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\OneBoardInlineTranslate.exe"; Description: "Launch OneBoard Inline Translate"; Flags: nowait postinstall skipifsilent

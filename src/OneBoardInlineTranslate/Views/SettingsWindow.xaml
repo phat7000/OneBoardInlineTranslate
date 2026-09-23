@@ -1,155 +1,234 @@
 <Window x:Class="OneBoardInlineTranslate.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="OneBoard Inline Translate - Settings"
-        Width="720" Height="610" MinWidth="640" MinHeight="520"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResizeWithGrip">
-  <Grid Margin="24">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-      <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
-    <StackPanel Margin="0,0,0,16">
-      <TextBlock FontSize="24" FontWeight="SemiBold" Text="OneBoard Inline Translate" />
-      <TextBlock Margin="0,4,0,0" Foreground="{StaticResource MutedBrush}"
-                 Text="Fast cross-language communication, without automatic sending." />
-    </StackPanel>
+        Title="OneBoard Inline Translate — Settings"
+        Icon="/Assets/OneBoardInlineTranslate.ico"
+        Width="820" Height="650" MinWidth="720" MinHeight="560"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResizeWithGrip">
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="184" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
 
-    <TabControl Grid.Row="1" Background="White" BorderBrush="{StaticResource BorderBrush}" Padding="8">
-      <TabItem Header="General">
-        <StackPanel Margin="18">
-          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Application" />
-          <CheckBox x:Name="StartWithWindowsCheckBox"
-                    Content="Start OneBoard Inline Translate with Windows" />
-          <CheckBox x:Name="PausedCheckBox" Content="Pause translation hotkeys" />
-          <TextBlock Margin="0,18,0,4" FontWeight="SemiBold" Text="Behavior" />
-          <TextBlock Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
-                     Text="The app stays in the notification area. It never presses Enter, clicks Send, or submits a form." />
+    <Border Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
+      <DockPanel Margin="15,18">
+        <StackPanel DockPanel.Dock="Top" Margin="5,0,5,16">
+          <TextBlock FontSize="16" FontWeight="SemiBold" Text="OneBoard" />
+          <TextBlock Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}" FontSize="11"
+                     Text="Inline Translate" />
         </StackPanel>
-      </TabItem>
-
-      <TabItem Header="Languages">
-        <StackPanel Margin="18">
-          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Preferred language" />
-          <TextBlock Margin="0,4,0,10" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
-                     Text="Alt+Q translates selected text into this language." />
-          <ComboBox x:Name="PreferredLanguageCombo" Width="280" HorizontalAlignment="Left"
-                    DisplayMemberPath="DisplayName" SelectedValuePath="Code" />
-          <TextBlock Margin="0,18,0,0" Foreground="{StaticResource MutedBrush}"
-                     Text="v1 supports Vietnamese, English, and Simplified Chinese." />
+        <StackPanel>
+          <Button Style="{StaticResource NavButtonStyle}" Tag="General" Content="General" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Languages" Content="Languages" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Hotkeys" Content="Hotkeys" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Providers" Content="Providers" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Local" Content="Local Translation" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Result" Content="Result Window" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="Privacy" Content="Privacy" Click="Navigation_Click" />
+          <Button Style="{StaticResource NavButtonStyle}" Tag="About" Content="About" Click="Navigation_Click" />
         </StackPanel>
-      </TabItem>
+      </DockPanel>
+    </Border>
 
-      <TabItem Header="Hotkeys">
-        <Grid Margin="18">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220" />
-            <ColumnDefinition Width="220" />
-          </Grid.ColumnDefinitions>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <TextBlock Grid.ColumnSpan="2" FontSize="17" FontWeight="SemiBold" Text="Global hotkeys" />
-          <TextBlock Grid.Row="1" Margin="0,15,12,0" VerticalAlignment="Center" Text="Understand selection" />
-          <TextBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" x:Name="UnderstandHotkeyBox" />
-          <TextBlock Grid.Row="2" Margin="0,10,12,0" VerticalAlignment="Center" Text="Translate to English" />
-          <TextBox Grid.Row="2" Grid.Column="1" Margin="0,6,0,0" x:Name="EnglishHotkeyBox" />
-          <TextBlock Grid.Row="3" Margin="0,10,12,0" VerticalAlignment="Center" Text="Translate to Chinese" />
-          <TextBox Grid.Row="3" Grid.Column="1" Margin="0,6,0,0" x:Name="ChineseHotkeyBox" />
-          <TextBlock Grid.Row="4" Margin="0,10,12,0" VerticalAlignment="Center" Text="Reply Mode" />
-          <TextBox Grid.Row="4" Grid.Column="1" Margin="0,6,0,0" x:Name="ReplyHotkeyBox" />
-          <TextBlock Grid.Row="5" Margin="0,10,12,0" VerticalAlignment="Center" Text="OCR region translate" />
-          <TextBox Grid.Row="5" Grid.Column="1" Margin="0,6,0,0" x:Name="OcrHotkeyBox" />
-          <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Margin="0,16,0,0"
-                     Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
-                     Text="Use one or more of Alt, Ctrl, or Shift plus a letter, for example Alt+Q." />
-        </Grid>
-      </TabItem>
+    <Grid Grid.Column="1" Margin="24,20,24,16">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
 
-      <TabItem Header="Providers">
-        <Grid Margin="18">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="150" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <TextBlock Grid.ColumnSpan="2" FontSize="17" FontWeight="SemiBold" Text="Translation provider" />
-          <TextBlock Grid.Row="1" Margin="0,16,12,0" VerticalAlignment="Center" Text="Provider" />
-          <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" x:Name="ProviderCombo"
-                    SelectionChanged="ProviderCombo_SelectionChanged" />
-          <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,3" TextWrapping="Wrap"
-                     Foreground="{StaticResource MutedBrush}" x:Name="ProviderDescriptionText" />
-          <TextBlock Grid.Row="3" Margin="0,11,12,0" VerticalAlignment="Center"
-                     x:Name="EndpointLabel" Text="Endpoint (optional)" />
-          <TextBox Grid.Row="3" Grid.Column="1" Margin="0,6,0,0" x:Name="EndpointBox" />
-          <TextBlock Grid.Row="4" Margin="0,11,12,0" VerticalAlignment="Center"
-                     x:Name="RegionLabel" Text="Region (optional)" />
-          <TextBox Grid.Row="4" Grid.Column="1" Margin="0,6,0,0" x:Name="RegionBox" />
-          <TextBlock Grid.Row="5" Margin="0,11,12,0" VerticalAlignment="Center"
-                     x:Name="ApiKeyLabel" Text="API key" />
-          <PasswordBox Grid.Row="5" Grid.Column="1" Margin="0,6,0,0" MinHeight="32" Padding="8,5"
-                       x:Name="ApiKeyBox" AutomationProperties.Name="Translation provider API key" />
-          <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,5,0,0" TextWrapping="Wrap"
-                     Foreground="{StaticResource MutedBrush}" x:Name="ApiKeyHintText" />
-          <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="-4,8,0,0"
-                      x:Name="TestConnectionPanel">
-            <Button x:Name="TestConnectionButton" Content="Test connection" Click="TestConnection_Click" />
-            <TextBlock x:Name="ProviderStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
-                       Foreground="{StaticResource MutedBrush}" />
+      <Grid>
+        <ScrollViewer x:Name="GeneralSection" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="General" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock FontWeight="SemiBold" Text="Application" />
+                <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows" />
+                <CheckBox x:Name="PausedCheckBox" Content="Pause translation hotkeys" />
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock FontWeight="SemiBold" Text="Safe by design" />
+                <TextBlock Margin="0,7,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                           Text="OneBoard replaces only the selected range. It never presses Enter, clicks Send, or submits a form." />
+              </StackPanel>
+            </Border>
           </StackPanel>
-          <TextBlock Grid.Row="8" Grid.ColumnSpan="2" Margin="0,16,0,0" TextWrapping="Wrap"
-                     Foreground="{StaticResource MutedBrush}"
-                     Text="Keys are protected for the current Windows user with DPAPI and are never stored in settings.json. Selected text is sent to the configured provider only when you invoke a translation action." />
-        </Grid>
-      </TabItem>
+        </ScrollViewer>
 
-      <TabItem Header="Privacy">
-        <StackPanel Margin="18">
-          <TextBlock FontSize="17" FontWeight="SemiBold" Text="Privacy defaults" />
-          <TextBlock Margin="0,16,0,7" Text="Translation history: Off - not stored" />
-          <TextBlock Margin="0,7" Text="Telemetry: Off - not implemented" />
-          <TextBlock Margin="0,7" Text="Clipboard restoration: On" />
-          <TextBlock Margin="0,7" Text="Auto-send: Never" />
-          <TextBlock Margin="0,18,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
-                     Text="Cloud providers receive selected text for requested translations. OCR screenshots are processed locally and are never uploaded or saved." />
-        </StackPanel>
-      </TabItem>
+        <ScrollViewer x:Name="LanguagesSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Languages" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Preferred language" />
+                <TextBlock Margin="0,0,0,8" Foreground="{StaticResource MutedBrush}" Text="Used by Understand and OCR." />
+                <ComboBox x:Name="PreferredLanguageCombo" IsEditable="True" IsTextSearchEnabled="False"
+                          DisplayMemberPath="PickerLabel" SelectedValuePath="Code" KeyUp="LanguageCombo_KeyUp"
+                          DropDownOpened="LanguageCombo_DropDownOpened" AutomationProperties.Name="Preferred language" />
+                <TextBlock Margin="0,15,0,5" Style="{StaticResource FieldLabelStyle}" Text="Quick Target 1" />
+                <ComboBox x:Name="QuickTarget1Combo" IsEditable="True" IsTextSearchEnabled="False"
+                          DisplayMemberPath="PickerLabel" SelectedValuePath="Code" KeyUp="LanguageCombo_KeyUp"
+                          SelectionChanged="QuickLanguage_SelectionChanged" DropDownOpened="LanguageCombo_DropDownOpened"
+                          AutomationProperties.Name="Quick Target 1 language" />
+                <TextBlock Margin="0,15,0,5" Style="{StaticResource FieldLabelStyle}" Text="Quick Target 2" />
+                <ComboBox x:Name="QuickTarget2Combo" IsEditable="True" IsTextSearchEnabled="False"
+                          DisplayMemberPath="PickerLabel" SelectedValuePath="Code" KeyUp="LanguageCombo_KeyUp"
+                          SelectionChanged="QuickLanguage_SelectionChanged" DropDownOpened="LanguageCombo_DropDownOpened"
+                          AutomationProperties.Name="Quick Target 2 language" />
+              </StackPanel>
+            </Border>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Refresh languages" Click="RefreshLanguages_Click" />
+              <TextBlock x:Name="LanguageStatusText" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+            </DockPanel>
+          </StackPanel>
+        </ScrollViewer>
 
-      <TabItem Header="About">
-        <StackPanel Margin="18">
-          <TextBlock FontSize="20" FontWeight="SemiBold" Text="OneBoard Inline Translate" />
-          <TextBlock Margin="0,8,0,0" Text="Version 1.1.0" />
-          <TextBlock Margin="0,12,0,0" Text="https://github.com/phat7000/OneBoardInlineTranslate" />
-          <TextBlock Margin="0,18,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
-                     Text="A local-first Windows communication utility. No analytics, no translation history, and no automatic sending." />
-        </StackPanel>
-      </TabItem>
-    </TabControl>
+        <ScrollViewer x:Name="HotkeysSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Hotkeys" />
+            <Border Style="{StaticResource CardStyle}">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="230" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Margin="0,8" Text="Understand selection" /><TextBox Grid.Column="1" x:Name="UnderstandHotkeyBox" />
+                <TextBlock Grid.Row="1" Margin="0,12" x:Name="Quick1HotkeyLabel" Text="Quick Target 1" /><TextBox Grid.Row="1" Grid.Column="1" x:Name="EnglishHotkeyBox" />
+                <TextBlock Grid.Row="2" Margin="0,12" x:Name="Quick2HotkeyLabel" Text="Quick Target 2" /><TextBox Grid.Row="2" Grid.Column="1" x:Name="ChineseHotkeyBox" />
+                <TextBlock Grid.Row="3" Margin="0,12" Text="Reply Mode" /><TextBox Grid.Row="3" Grid.Column="1" x:Name="ReplyHotkeyBox" />
+                <TextBlock Grid.Row="4" Margin="0,12" Text="OCR region translate" /><TextBox Grid.Row="4" Grid.Column="1" x:Name="OcrHotkeyBox" />
+              </Grid>
+            </Border>
+            <TextBlock Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                       Text="Use Alt, Ctrl, or Shift plus a letter. Existing Alt+E and Alt+C bindings remain unchanged when their target language changes." />
+          </StackPanel>
+        </ScrollViewer>
 
-    <DockPanel Grid.Row="2" Margin="0,16,0,0" LastChildFill="False">
-      <TextBlock x:Name="SaveStatusText" DockPanel.Dock="Left" VerticalAlignment="Center"
-                 Foreground="{StaticResource MutedBrush}" />
-      <Button DockPanel.Dock="Right" Content="Cancel" Click="Cancel_Click" />
-      <Button DockPanel.Dock="Right" Content="Save" Click="Save_Click"
-              Background="{StaticResource AccentBrush}" Foreground="White" BorderBrush="{StaticResource AccentBrush}" />
-    </DockPanel>
+        <ScrollViewer x:Name="ProvidersSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Providers" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Translation provider" />
+                <ComboBox x:Name="ProviderCombo" SelectionChanged="ProviderCombo_SelectionChanged" />
+                <TextBlock x:Name="ProviderDescriptionText" Margin="0,9,0,12" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+
+                <TextBlock x:Name="RegionLabel" Style="{StaticResource FieldLabelStyle}" Text="Azure region (optional)" />
+                <TextBox x:Name="RegionBox" Margin="0,0,0,10" />
+                <ComboBox x:Name="LangblyRegionCombo" Margin="0,0,0,10" SelectionChanged="LangblyRegionCombo_SelectionChanged" />
+
+                <TextBlock x:Name="EndpointLabel" Style="{StaticResource FieldLabelStyle}" Text="Endpoint" />
+                <TextBox x:Name="EndpointBox" Margin="0,0,0,10" />
+
+                <TextBlock x:Name="ApiKeyLabel" Style="{StaticResource FieldLabelStyle}" Text="API key" />
+                <PasswordBox x:Name="ApiKeyBox" MinHeight="32" Padding="8,5" BorderBrush="{StaticResource BorderBrush}"
+                             AutomationProperties.Name="Translation provider API key" />
+                <TextBlock x:Name="ApiKeyHintText" Margin="0,5,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+
+                <StackPanel x:Name="TestConnectionPanel" Orientation="Horizontal" Margin="-4,10,0,0">
+                  <Button x:Name="TestConnectionButton" Content="Test connection" Click="TestConnection_Click" />
+                  <TextBlock x:Name="ProviderStatusText" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                       Text="Credentials are protected for the current Windows user with DPAPI and are never stored in settings.json." />
+          </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer x:Name="LocalSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Local Translation" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock FontWeight="SemiBold" Text="On-device model manager" />
+                <TextBlock Margin="0,5,0,12" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                           Text="Models download only when requested, are SHA-256 verified, and keep translation text on this device." />
+                <StackPanel x:Name="ModelsPanel" />
+                <ProgressBar x:Name="ModelProgressBar" Height="5" Margin="0,8,0,0" Visibility="Collapsed" />
+                <DockPanel Margin="0,6,0,0">
+                  <Button x:Name="CancelDownloadButton" DockPanel.Dock="Right" Content="Cancel" Visibility="Collapsed" Click="CancelDownload_Click" />
+                  <TextBlock x:Name="ModelStatusText" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                </DockPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer x:Name="ResultSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Result Window" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Mode" />
+                <ComboBox x:Name="ResultModeCombo" SelectionChanged="ResultModeCombo_SelectionChanged" />
+                <TextBlock x:Name="ResultModeDescription" Margin="0,6,0,14" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                <StackPanel x:Name="PopupOptionsPanel">
+                  <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Popup size" />
+                  <ComboBox x:Name="PopupSizeCombo" SelectionChanged="PopupSizeCombo_SelectionChanged" />
+                  <Grid x:Name="CustomSizePanel" Margin="0,9,0,12">
+                    <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <StackPanel><TextBlock Text="Width" /><TextBox x:Name="PopupWidthBox" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Maximum height" /><TextBox x:Name="PopupHeightBox" /></StackPanel>
+                  </Grid>
+                  <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Popup position" />
+                  <ComboBox x:Name="PopupPositionCombo" SelectionChanged="PopupPositionCombo_SelectionChanged" />
+                  <Grid x:Name="CustomPositionPanel" Margin="0,9,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <StackPanel><TextBlock Text="Left" /><TextBox x:Name="PopupLeftBox" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Top" /><TextBox x:Name="PopupTopBox" /></StackPanel>
+                  </Grid>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                       Text="Pinned mode remembers its size, position, and monitor. Hidden mode suppresses successful quick-replace notices; Understand still opens a compact result." />
+          </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer x:Name="PrivacySection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Privacy" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock Margin="0,4" Text="Translation history     Off — not stored" />
+                <TextBlock Margin="0,4" Text="Telemetry                  Off — not implemented" />
+                <TextBlock Margin="0,4" Text="Clipboard restoration   On" />
+                <TextBlock Margin="0,4" Text="Automatic sending       Never" />
+              </StackPanel>
+            </Border>
+            <TextBlock Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                       Text="Cloud providers receive selected text only when you request translation. Local Translation keeps text on-device. OCR screenshots are processed locally and are not saved." />
+          </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer x:Name="AboutSection" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="About" />
+            <Border Style="{StaticResource CardStyle}">
+              <StackPanel>
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="OneBoard Inline Translate" />
+                <TextBlock Margin="0,7,0,0" Text="Version 1.2.0" />
+                <TextBlock Margin="0,10,0,0" Foreground="{StaticResource AccentBrush}" Text="github.com/phat7000/OneBoardInlineTranslate" />
+                <TextBlock Margin="0,13,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                           Text="A fast, local-first Windows communication utility. No analytics, no translation history, and no automatic sending." />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
+      <DockPanel Grid.Row="1" Margin="0,14,0,0" LastChildFill="False">
+        <TextBlock x:Name="SaveStatusText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+        <Button DockPanel.Dock="Right" Content="Cancel" Click="Cancel_Click" />
+        <Button DockPanel.Dock="Right" Content="Save" Click="Save_Click"
+                Background="{StaticResource AccentBrush}" Foreground="White" BorderBrush="{StaticResource AccentBrush}" />
+      </DockPanel>
+    </Grid>
   </Grid>
 </Window>

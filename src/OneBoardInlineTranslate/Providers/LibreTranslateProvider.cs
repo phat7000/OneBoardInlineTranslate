@@ -39,7 +39,7 @@ internal sealed class LibreTranslateProvider : ITranslationProvider
         {
             q = request.Text,
             source,
-            target = request.TargetLanguage.Code == "zh-Hans" ? "zh" : request.TargetLanguage.Code,
+            target = ProviderLanguageCodes.ToLibreTranslate(request.TargetLanguage),
             format = "text",
             api_key = string.IsNullOrWhiteSpace(_apiKey) ? null : _apiKey
         };
@@ -86,5 +86,32 @@ internal sealed class LibreTranslateProvider : ITranslationProvider
             TargetLanguage = Language.Vietnamese
         }, cancellationToken);
         return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
+    }
+
+    public async Task<ProviderLanguageCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken)
+    {
+        var endpointText = _endpoint.ToString();
+        var languagesUri = endpointText.EndsWith("/translate", StringComparison.OrdinalIgnoreCase)
+            ? new Uri(endpointText[..^"/translate".Length] + "/languages")
+            : new Uri(_endpoint, "languages");
+        using var response = await _httpClient.GetAsync(
+            languagesUri,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var languages = document.RootElement.EnumerateArray().Select(item => LanguageCatalog.Resolve(
+                item.GetProperty("code").GetString() ?? string.Empty,
+                item.TryGetProperty("name", out var name) ? name.GetString() : null));
+            var normalized = ProviderHttp.DistinctLanguages(languages);
+            return new ProviderLanguageCapabilities(Id, normalized, normalized, DateTimeOffset.UtcNow);
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            throw new ProviderException(ProviderFailure.ProviderUnavailable);
+        }
     }
 }

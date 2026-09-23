@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $artifactsDirectory = Join-Path $repositoryRoot 'artifacts'
 $publishDirectory = Join-Path $artifactsDirectory 'publish'
-$zipPath = Join-Path $artifactsDirectory 'OneBoardInlineTranslate-1.1.0-win-x64.zip'
+$zipPath = Join-Path $artifactsDirectory 'OneBoardInlineTranslate-1.2.0-win-x64.zip'
 
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Build-Release.ps1')
@@ -59,5 +59,5 @@ if (-not $SkipInstaller) {
 
 Write-Host "Portable package: $zipPath"
 if (-not $SkipInstaller) {
-    Write-Host "Installer: $(Join-Path $artifactsDirectory 'OneBoardInlineTranslate-Setup-1.1.0-win-x64.exe')"
+    Write-Host "Installer: $(Join-Path $artifactsDirectory 'OneBoardInlineTranslate-Setup-1.2.0-win-x64.exe')"
 }

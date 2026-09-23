@@ -1,83 +1,70 @@
 # Architecture
 
-## Product boundary
+## Boundary
 
-OneBoard Inline Translate is one per-user WPF process targeting .NET 10 and Windows x64. It has no backend, account system, database, telemetry SDK, translation history, browser scraper, or auto-send capability.
-
-## Runtime flow
+OneBoard is one per-user WPF process targeting .NET 10, Windows x64, and PerMonitorV2 DPI awareness. It has no backend, account, telemetry SDK, history database, browser scraper, auto-send path, Ollama integration, or general-purpose LLM.
 
 ```mermaid
 flowchart LR
-    HK[Global hotkey] --> FG[Snapshot foreground HWND/process]
-    FG --> CAP[UIA selection]
-    CAP -->|unavailable| CB[Transactional clipboard copy]
-    CAP --> ROUTE[Operation router]
-    CB --> ROUTE
-    ROUTE --> TX[Provider-neutral translation]
-    TX --> OV[Non-activating overlay]
-    TX --> REPLACE[Revalidate HWND and paste selection]
-    TX --> REPLY[Reply preview and explicit insert/copy]
-    OCR[Region selection + local Windows OCR] --> TX
+  HK[Global hotkey] --> FG[Foreground snapshot]
+  FG --> CAP[UIA selection]
+  CAP -->|fallback| CB[Transactional clipboard]
+  CAP --> ROUTE[Operation router]
+  CB --> ROUTE
+  ROUTE --> TS[Translation service]
+  TS --> CLOUD[Selected cloud provider]
+  TS --> LOCAL[Verified local model]
+  CLOUD --> OUT[Popup / pinned / replace / reply]
+  LOCAL --> OUT
+  OCR[In-memory region OCR] --> TS
 ```
 
 ## Components
 
 | Area | Responsibility |
 |---|---|
-| `Infrastructure` | Win32 hotkeys, foreground identity, keyboard chords, single instance, and transactional clipboard safety |
-| `Services` | capture/replacement, settings, startup, translation orchestration, language detection, reply, tray, and overlay positioning |
-| `Providers` | supported Google Cloud Translation, Azure Translator, DeepL, and LibreTranslate-compatible HTTP contracts |
-| `Security` | per-user DPAPI credential protection |
-| `OCR` | region selection orchestration, in-memory screen capture, and Windows OCR |
-| `Views` | Settings, Reply Mode, and region selection WPF surfaces |
-| `Diagnostics` | metadata-only local JSON Lines logging |
+| `Infrastructure` | Win32 hotkeys, foreground identity, keyboard chords, single instance, clipboard safety |
+| `Services` | capture/replacement, versioned settings, startup, routing, reply, tray, result policy/positioning |
+| `Providers` | official cloud HTTP contracts and provider code normalization |
+| `Local` | trusted manifests, secure downloads/activation, persistent private worker, bounded model cache, direct/pivot provider |
+| `Models` | canonical language catalog, provider capabilities, translation/result/settings domain |
+| `Security` | current-user DPAPI credentials |
+| `OCR` | monitor-aware region selection, in-memory GDI capture, Windows OCR |
+| `Views` | Settings, Reply Mode, region selection |
+| `Diagnostics` | allow-listed metadata-only JSON Lines |
+
+## Translation routing
+
+`ITranslationService` creates only the configured provider. Normal cloud translation uses one provider request when source detection can occur in the same request. Capability lists are fetched separately only from Settings/Reply capability workflows and cached as non-sensitive metadata for 24 hours. If a cached target list proves the requested target is unsupported, routing stops before sending content.
+
+Provider identifiers are normalized into canonical internal language IDs such as `zh-Hans`; each provider maps those IDs at its boundary.
+
+Local mode constructs `LocalTranslationProvider` and never a cloud fallback. It selects an installed direct direction first, otherwise an installed two-leg route through English for Vietnamese↔Chinese. A persistent JSON-lines child process hosts CTranslate2/SentencePiece, retains at most the configured number of models, and is terminated on cancellation or app exit. User text travels only through anonymous pipes and is not placed in arguments, files, exceptions, or logs.
+
+## Local install trust boundary
+
+The base app packages only the small worker source and a hard-coded manifest. Runtime/model payloads are downloaded by explicit user action over HTTPS into a random temporary path, checked for exact size and SHA-256, extracted with traversal rejection, validated for expected direction/files, and moved atomically into `%LOCALAPPDATA%\OneBoardInlineTranslate\models`. Failed and cancelled staging files are cleaned. Unverified payloads are never activated.
+
+## Result window
+
+One `OverlayWindow` instance is reused:
+
+- Popup: `WS_EX_NOACTIVATE`, pointer-near-selection proxy or chosen monitor corner, work-area clamping, auto-hide.
+- Pinned: activating, draggable/resizable persistent surface; physical bounds and monitor name saved after movement and recovered against available work areas.
+- Hidden: quick replacement success has no result surface; errors/unsafe replacement and explicit Understand/OCR results remain visible in the smallest surface.
+
+Long content is scroll-bounded. Positioning uses monitor pixels and current window DPI; WPF sizes are converted at the native boundary.
 
 ## Safety invariants
 
-### No automatic send
+- Only Ctrl+C and Ctrl+V are synthesized. No Enter key constant or send/submit integration exists.
+- The hotkey-time HWND/process remains authoritative and is revalidated before synthetic input.
+- Clipboard capture eagerly snapshots all safely cloneable formats, applies Windows history/cloud exclusion to temporary values, and restores independently of operation cancellation.
+- Reply Insert is explicit and falls back to Copy if the recorded destination cannot be safely restored.
+- OCR pixels remain in memory, are released promptly, and are never uploaded or persisted.
 
-The only synthesized input chords are Ctrl+C and Ctrl+V. No Enter virtual key is declared. The application does not discover or invoke send buttons, submit forms, target application APIs, or message APIs. Reply Mode inserts only after an explicit click and never sends.
+## State and secrets
 
-### Clipboard transaction
+Versioned non-sensitive JSON is stored at `%LOCALAPPDATA%\OneBoardInlineTranslate\settings.json`. Schema 2 migrates old values and adds quick targets, recent languages, result settings/bounds, capability cache, and local cache limits. Credentials remain in a separate current-user DPAPI file with provider-specific names.
 
-Before temporary clipboard use, every advertised format is eagerly materialized into an independent `DataObject`. If any value cannot be cloned safely, the operation aborts before mutation. Temporary data carries `ExcludeClipboardContentFromMonitorProcessing`; restoration uses a persistent clipboard write with a longer retry window and is not cancelled when the originating operation is cancelled.
-
-### Foreground authority
-
-The hotkey-time HWND and process ID are authoritative. Ctrl+C and Ctrl+V are emitted only after the HWND is revalidated as the foreground window. Reply Mode may reactivate its recorded source window after explicit Insert; it verifies the HWND still exists, belongs to the same process, and becomes foreground. Failure falls back to explicit clipboard copy.
-
-### Non-activating overlay
-
-The translation overlay uses `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, `ShowActivated=false`, `SWP_NOACTIVATE`, and a `WM_MOUSEACTIVATE` guard. Placement is computed in monitor pixel coordinates and clamped to the work area.
-
-## Translation architecture
-
-`ITranslationService` accepts a `TranslationRequest` and delegates to an `ITranslationProvider`. Capture, overlay, replace, reply, and OCR code depend only on the service interface. Domain model `ToString()` implementations report metadata and text length, never content.
-
-Provider endpoints must use HTTPS, except loopback HTTP for a locally hosted LibreTranslate-compatible service. `HttpClient` applies a bounded request timeout, connection pooling, and automatic response decompression. Production requests do not run until the user invokes a translation action.
-
-Google Cloud Translation uses the official Basic v2 `translate` endpoint. The API key is carried only in the `X-Goog-Api-Key` header. When source language is not already known, the request omits `source`, so detection and translation complete in the same provider request.
-
-## Credentials and settings
-
-Non-sensitive versioned JSON lives at `%LOCALAPPDATA%\OneBoardInlineTranslate\settings.json`. Corrupt JSON falls back to safe defaults. Provider secrets are stored separately in a DPAPI-encrypted per-user file and never serialized with settings. Startup uses the current user's `Run` registry key and requires no administrator rights.
-
-## OCR data flow
-
-The selector returns physical screen coordinates under PerMonitorV2 awareness. GDI captures only the selected rectangle into an HBITMAP, which is copied into a frozen WPF bitmap and immediately releases native handles. Oversized images are downscaled in memory to the Windows OCR maximum. Windows OCR engines for installed English, Vietnamese, and Simplified Chinese packs are considered. No screenshot path or disk write exists in the runtime flow.
-
-## Threading and cancellation
-
-- WPF owns clipboard operations on the application STA dispatcher.
-- UI Automation provider calls run on a bounded single-flight worker path.
-- One coordinator semaphore serializes hotkey operations.
-- Translation and provider HTTP operations accept cancellation tokens.
-- App shutdown cancels the active pipeline while clipboard restoration ignores cancellation.
-
-## Diagnostics
-
-The allow-listed diagnostic record includes timestamp, operation, provider, process, capture method, capture latency, provider latency, output latency, total latency, success, and exception type. It excludes text, clipboard content, endpoint credentials, exception messages, response bodies, and stack traces. Logs remain local under `%LOCALAPPDATA%\OneBoardInlineTranslate\logs`.
-
-## Deployment
-
-Release publishing is self-contained for `win-x64`. The portable ZIP contains published runtime files only. The Inno Setup package installs per user under `%LOCALAPPDATA%\Programs`, provides Start Menu and optional desktop shortcuts, and leaves user settings intact on uninstall. The application manifest requests `asInvoker` and PerMonitorV2 DPI awareness.
+Diagnostics include timestamp, process, operation, provider, capture method, capture/provider/output/total timing, success, and exception type only. Text, screenshots, keys, response bodies, and exception messages are excluded.

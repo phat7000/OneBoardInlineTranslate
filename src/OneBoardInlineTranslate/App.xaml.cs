@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Windows;
 using OneBoardInlineTranslate.Diagnostics;
 using OneBoardInlineTranslate.Infrastructure;
+using OneBoardInlineTranslate.Local;
 using OneBoardInlineTranslate.Models;
 using OneBoardInlineTranslate.OCR;
 using OneBoardInlineTranslate.Security;
@@ -24,11 +25,16 @@ public partial class App : System.Windows.Application
     private StartupService? _startup;
     private HttpClient? _httpClient;
     private OverlayWindow? _overlay;
+    private LocalTranslationEngine? _localEngine;
+    private LocalModelManager? _localModels;
 
     protected override async void OnStartup(StartupEventArgs eventArgs)
     {
         base.OnStartup(eventArgs);
-        _singleInstance = SingleInstanceGuard.Acquire();
+        var integrationMode = eventArgs.Args.Contains("--integration-test", StringComparer.OrdinalIgnoreCase);
+        _singleInstance = SingleInstanceGuard.Acquire(integrationMode
+            ? $"Local\\OneBoardInlineTranslate.IntegrationTest.{Environment.ProcessId}"
+            : null);
         if (!_singleInstance.OwnsInstance)
         {
             Shutdown(0);
@@ -42,7 +48,7 @@ public partial class App : System.Windows.Application
             _credentials = new DpapiCredentialStore();
             _startup = new StartupService();
             var clipboard = new ClipboardService();
-            _overlay = new OverlayWindow(clipboard);
+            _overlay = new OverlayWindow(clipboard, _settings);
             MainWindow = _overlay;
             var windowHandle = _overlay.EnsureWindowHandle();
 
@@ -60,20 +66,35 @@ public partial class App : System.Windows.Application
             {
                 Timeout = TimeSpan.FromSeconds(25)
             };
-            var integrationMode = eventArgs.Args.Contains("--integration-test", StringComparer.OrdinalIgnoreCase);
+            _localModels = new LocalModelManager(_httpClient);
+            _localEngine = new LocalTranslationEngine(_localModels, loadedSettings.LocalTranslation);
             _translation = new TranslationService(
                 _settings,
                 _credentials,
                 new LanguageDetector(),
                 _httpClient,
-                integrationMode ? new DeterministicTranslationProvider() : null);
+                integrationMode ? new DeterministicTranslationProvider() : null,
+                _localModels,
+                _localEngine);
 
-            var runtimeSettings = integrationMode ? new AppSettings() : loadedSettings;
+            var runtimeSettings = integrationMode
+                ? new AppSettings
+                {
+                    Hotkeys = new HotkeySettings
+                    {
+                        Understand = "Ctrl+Shift+Q",
+                        TranslateToEnglish = "Ctrl+Shift+E",
+                        TranslateToChinese = "Ctrl+Shift+C",
+                        Reply = "Ctrl+Shift+R",
+                        OcrTranslate = "Ctrl+Alt+Q"
+                    }
+                }
+                : loadedSettings;
             _hotkeys = new GlobalHotkeyService(
                 windowHandle,
                 runtimeSettings.Hotkeys,
                 paused: !integrationMode && runtimeSettings.IsPaused);
-            var reply = new ReplyService(_translation, clipboard, replacementService);
+            var reply = new ReplyService(_translation, clipboard, replacementService, _settings);
             _coordinator = new HotkeyCoordinator(
                 _hotkeys,
                 foregroundWindows,
@@ -119,6 +140,7 @@ public partial class App : System.Windows.Application
         _coordinator?.Dispose();
         _hotkeys?.Dispose();
         _tray?.Dispose();
+        _localEngine?.Dispose();
         _httpClient?.Dispose();
         _singleInstance?.Dispose();
         base.OnExit(eventArgs);
@@ -138,7 +160,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        new SettingsWindow(_settings, _credentials, _translation, _startup).Show();
+        new SettingsWindow(_settings, _credentials, _translation, _startup, _localModels!).Show();
     }
 
     private async void TogglePause()
@@ -186,7 +208,7 @@ public partial class App : System.Windows.Application
     private static void ShowAbout()
     {
         MessageBox.Show(
-            "OneBoard Inline Translate\nVersion 1.1.0\n\nNo translation history. No telemetry. Never auto-sends.\n\nhttps://github.com/phat7000/OneBoardInlineTranslate",
+            "OneBoard Inline Translate\nVersion 1.2.0\n\nNo translation history. No telemetry. Never auto-sends.\n\nhttps://github.com/phat7000/OneBoardInlineTranslate",
             "About OneBoard Inline Translate",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

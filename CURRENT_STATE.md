@@ -1,16 +1,21 @@
-# OneBoard Inline Translate - Current State
+# Current State
 
-Overall status: COMPLETE - focused post-v1 Phase 2 passed as OneBoard Inline Translate v1.1.0.
-Current phase: Post-v1 Phase 2 complete
-Last completed phase: Google Cloud Translation, provider-specific configuration, latency visibility, and provider hardening
-Next action: Use v1.1.0 in daily work and collect factual latency/provider feedback before choosing any additional feature work.
-Current version: 1.1.0
-Current branch: main, tracking origin/main
-Latest commit: Phase 2 completion is the current `HEAD` after handoff; resolve with `git rev-parse HEAD`. The v1.0.0 release tag remains unchanged at `10f12e8e07e683bd45db7a1c2432ab3ab733ebf8`.
-Build status: Final Release x64 PASS on 2026-09-22; 0 warnings, 0 errors; format verification PASS.
-Test status: Default suite PASS 35/35; clipboard integration PASS 36/36; cross-process end-to-end PASS 36/36. Google tests use fake HTTP handlers and spend no quota. The historical Phase 0 external matrix remains user-confirmed PASS because its core was not materially changed.
-Packaging status: PASS. Portable `artifacts/OneBoardInlineTranslate-1.1.0-win-x64.zip` (82,733,006 bytes, SHA-256 `96C494C0975B11B45D75CAFC5D04BFCD145D301E73EBC70AAC399B8B0EA317A3`) and installer `artifacts/OneBoardInlineTranslate-Setup-1.1.0-win-x64.exe` (60,671,121 bytes, SHA-256 `7BC71D6BC8A31E202F1DAAD8D3B80F765EF5ABA9F269549A4F19EA900BEACF1B`) exist. Portable ProductVersion/launch smoke passed; ZIP contains no PDB/source files. v1.0.0 artifacts remain intact.
-GitHub status: v1.0.0 remains published and its tag was not moved. The v1.1.0 Phase 2 completion commit is pushed to `origin/main`; no new tag or GitHub Release was requested.
-Known blockers: No Google credential is configured locally, so the optional live Google smoke test was not run. No trusted code-signing certificate is available; v1.1.0 artifacts are unsigned. Neither condition blocks this phase.
-Important decisions: Preserve the validated capture/clipboard core; use official Cloud Translation Basic v2 with header authentication and one-request auto-detection; use provider-specific DPAPI credential names; keep timing local and metadata-only; keep history/telemetry off; never auto-send.
-Resume instructions: Read AUTONOMOUS_EXECUTION.md, this file, PHASE_STATUS.md, docs/DECISIONS.md, docs/EXECUTION_LOG.md, then inspect git status and recent git log. Treat v1.0.0 as an immutable published baseline and v1.1.0 Phase 2 as the current verified state. Do not implement speculative v2 work until daily-use evidence supports it.
+Status date: 2026-09-23
+
+- Product version: 1.2.0
+- Branch: `main`, tracking `origin/main`
+- Upgrade status: implementation and local release gate complete.
+- Preserved baseline: the validated UIA/clipboard/foreground/replacement core and existing Google Cloud work were retained.
+- Providers: Google Cloud Translation, Azure Translator, DeepL, LibreTranslate, TranslatePlus v2, Langbly, and Local Translation.
+- Languages: broad built-in fallback plus provider capability discovery/cache, searchable name/native-name/code selection, recent ordering, configurable preferred/quick targets, and unsupported-target prevention.
+- Local engine: on-demand private Python 3.12 + CTranslate2 4.8.2 + SentencePiece 0.2.1 runtime with four Argos-compatible OPUS-MT packages. No Ollama, LLM, installed Python, or configured server.
+- Result UX: Popup, reusable Pinned, and Hidden modes; saved size/position/monitor with work-area recovery.
+- Build/test: format verification PASS; Release x64 0 warnings/errors; default 49/49; clipboard 50/50; final isolated cross-process UIA/clipboard/no-Enter run 50/50.
+- Packaging: portable `artifacts/OneBoardInlineTranslate-1.2.0-win-x64.zip` — 83,064,726 bytes, SHA-256 `AA4DA83FB944B99B6E8E085880A21485CE2AB8B879147EE314A7610D493D9D45`; installer `artifacts/OneBoardInlineTranslate-Setup-1.2.0-win-x64.exe` — 60,910,970 bytes, SHA-256 `F54F1C11AEF515672915E052D8435A6FD97C42F06914C159C2EDAB76D84C8BCF`.
+- Packaging smoke: ProductVersion 1.2.0, executable and installer icon extraction PASS, worker included, no source/PDB in ZIP, portable launch PASS. Installer compilation passed; a live install was not run over the user's currently running older installed instance.
+- External provider testing: automated cloud tests use fake HTTP handlers. No live paid-provider credential was used.
+- Signing: no trusted certificate is present; artifacts are unsigned.
+- GitHub status: commit/push/tag/release status is finalized after this state file is committed. Existing release tags remain immutable.
+- Immutable history: the published `v1.0.0` tag remains unchanged. No existing tag is moved or overwritten.
+
+Resume by reading this file, `PHASE_STATUS.md`, `docs/DECISIONS.md`, and `docs/EXECUTION_LOG.md`, then inspect `git status`, `git log`, and `origin/main`.

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.IO.Compression;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
@@ -14,6 +15,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using OneBoardInlineTranslate.Diagnostics;
 using OneBoardInlineTranslate.Infrastructure;
+using OneBoardInlineTranslate.Local;
 using OneBoardInlineTranslate.Models;
 using OneBoardInlineTranslate.Services;
 using OneBoardInlineTranslate.OCR;
@@ -56,6 +58,20 @@ internal static class Program
         ,("Google honors cancellation", TestGoogleCancellationAsync)
         ,("Google maps provider 5xx failures", TestGoogleServerFailureAsync)
         ,("Google rejects malformed responses safely", TestGoogleMalformedResponseAsync)
+        ,("TranslatePlus v2 translation and language contracts", TestTranslatePlusContractsAsync)
+        ,("TranslatePlus maps invalid key, rate, server, and malformed failures", TestTranslatePlusFailuresAsync)
+        ,("TranslatePlus distinguishes timeout and cancellation", TestTranslatePlusTimeoutAndCancellationAsync)
+        ,("Langbly global, EU, translation, and language contracts", TestLangblyContractsAsync)
+        ,("Langbly maps invalid key, rate, server, and malformed failures", TestLangblyFailuresAsync)
+        ,("Langbly distinguishes timeout and cancellation", TestLangblyTimeoutAndCancellationAsync)
+        ,("Language catalog normalizes, searches, and orders recents", TestLanguageCatalogAsync)
+        ,("Provider capabilities prevent known unsupported targets", TestCapabilityFilteringAsync)
+        ,("Schema migration preserves v1 settings and adds v1.2 defaults", TestSettingsMigrationAsync)
+        ,("Result modes and bounds persist safely", TestResultSettingsAsync)
+        ,("Local manifest and verified-file checks reject corruption", TestLocalManifestAndVerificationAsync)
+        ,("Local model paths, archives, install cancellation, and removal are safe", TestLocalModelSafetyAsync)
+        ,("Local provider discovers pairs and routes direct and pivot translations", TestLocalProviderRoutingAsync)
+        ,("Application and package use the OneBoard icon", TestIconConfigurationAsync)
         ,("Provider connection failures use safe messages", TestProviderFailureMessagesAsync)
         ,("Overlay placement remains inside work areas", TestOverlayPositioningAsync)
         ,("Region coordinates normalize safely", TestScreenRegionAsync)
@@ -649,6 +665,472 @@ internal static class Program
             ProviderFailure.ProviderUnavailable);
     }
 
+    private static async Task TestTranslatePlusContractsAsync()
+    {
+        const string key = "translateplus-test-key";
+        var requests = 0;
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests++;
+            Equal(key, request.Headers.GetValues("X-API-KEY").Single());
+            False(request.RequestUri!.Query.Contains(key, StringComparison.Ordinal));
+            if (request.Method == HttpMethod.Get)
+            {
+                Equal(TranslatePlusProvider.LanguagesEndpoint, request.RequestUri.AbsoluteUri);
+                return JsonResponse("{\"supported_languages\":{\"Auto Detect\":\"auto\",\"English\":\"en\",\"Japanese\":\"ja\"}}");
+            }
+
+            Equal(TranslatePlusProvider.TranslateEndpoint, request.RequestUri.AbsoluteUri);
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            Equal("auto", document.RootElement.GetProperty("source").GetString());
+            Equal("en", document.RootElement.GetProperty("target").GetString());
+            return JsonResponse("{\"translations\":{\"text\":\"Xin chào\",\"translation\":\"Hello\",\"source\":\"vi\",\"target\":\"en\"},\"details\":{}}");
+        });
+        var provider = new TranslatePlusProvider(new HttpClient(handler), key, new LanguageDetector());
+        var result = await provider.TranslateAsync(new TranslationRequest
+        {
+            Text = "Xin chào",
+            TargetLanguage = Language.English
+        }, CancellationToken.None);
+        Equal("Hello", result.Text);
+        Equal("vi", result.SourceLanguage.Code);
+        var capabilities = await provider.GetCapabilitiesAsync(CancellationToken.None);
+        True(capabilities.SupportsTarget("ja"));
+        False(capabilities.SupportsTarget("auto"));
+        Equal(2, requests);
+    }
+
+    private static async Task TestTranslatePlusFailuresAsync()
+    {
+        await AssertTranslatePlusFailureAsync(HttpStatusCode.Forbidden, "{}", ProviderFailure.InvalidApiKey);
+        await AssertTranslatePlusFailureAsync(HttpStatusCode.TooManyRequests, "{}", ProviderFailure.RateLimited);
+        await AssertTranslatePlusFailureAsync(HttpStatusCode.ServiceUnavailable, "{}", ProviderFailure.ProviderUnavailable);
+        await AssertTranslatePlusFailureAsync(HttpStatusCode.OK, "{\"translations\":{}}", ProviderFailure.ProviderUnavailable);
+    }
+
+    private static async Task AssertTranslatePlusFailureAsync(
+        HttpStatusCode status,
+        string body,
+        ProviderFailure expected)
+    {
+        var provider = new TranslatePlusProvider(
+            new HttpClient(new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(body, status)))),
+            "key",
+            new LanguageDetector());
+        await ThrowsProviderFailureAsync(
+            () => provider.TranslateAsync(new TranslationRequest
+            {
+                Text = "Hello",
+                TargetLanguage = Language.Vietnamese
+            }, CancellationToken.None),
+            expected);
+    }
+
+    private static async Task TestTranslatePlusTimeoutAndCancellationAsync()
+    {
+        var handler = new StubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return JsonResponse("{}");
+        });
+        using var timeoutClient = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(30) };
+        var timeoutProvider = new TranslatePlusProvider(timeoutClient, "key", new LanguageDetector());
+        var health = await CreateTranslationService(timeoutProvider, timeoutClient).TestProviderAsync(CancellationToken.None);
+        Equal("Timeout", health.Status);
+
+        var cancellationProvider = new TranslatePlusProvider(
+            new HttpClient(new StubHttpMessageHandler(async (_, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return JsonResponse("{}");
+            })),
+            "key",
+            new LanguageDetector());
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await ThrowsAsync<OperationCanceledException>(() => cancellationProvider.TranslateAsync(
+            new TranslationRequest { Text = "Hello", TargetLanguage = Language.Vietnamese },
+            cancellation.Token));
+    }
+
+    private static async Task TestLangblyContractsAsync()
+    {
+        const string key = "langbly-test-key";
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            Equal(key, request.Headers.GetValues("X-API-Key").Single());
+            False(request.RequestUri!.Query.Contains(key, StringComparison.Ordinal));
+            Equal("api.langbly.com", request.RequestUri.Host);
+            if (request.Method == HttpMethod.Get)
+            {
+                Equal(LangblyProvider.LanguagesPath, request.RequestUri.AbsolutePath);
+                return JsonResponse("{\"data\":{\"languages\":[{\"language\":\"en\",\"name\":\"English\"},{\"language\":\"ja\",\"name\":\"Japanese\"}]}}");
+            }
+
+            Equal(LangblyProvider.TranslatePath, request.RequestUri.AbsolutePath);
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            False(document.RootElement.TryGetProperty("source", out _));
+            Equal("vi", document.RootElement.GetProperty("target").GetString());
+            return JsonResponse("{\"data\":{\"translations\":[{\"translatedText\":\"Xin chào\",\"detectedSourceLanguage\":\"en\"}]}}");
+        });
+        var provider = new LangblyProvider(
+            new HttpClient(handler), key, "Global", string.Empty, new LanguageDetector());
+        var result = await provider.TranslateAsync(new TranslationRequest
+        {
+            Text = "Hello",
+            TargetLanguage = Language.Vietnamese
+        }, CancellationToken.None);
+        Equal("Xin chào", result.Text);
+        var capabilities = await provider.GetCapabilitiesAsync(CancellationToken.None);
+        True(capabilities.SupportsTarget("ja"));
+
+        var eu = new LangblyProvider(
+            new HttpClient(handler), key, "EU", string.Empty, new LanguageDetector());
+        Equal("eu.langbly.com", eu.TranslateEndpoint.Host);
+        Equal("custom.example", LangblyProvider.ResolveEndpoint("Custom", "https://custom.example").Host);
+    }
+
+    private static async Task TestLangblyFailuresAsync()
+    {
+        await AssertLangblyFailureAsync(HttpStatusCode.Unauthorized, "{}", ProviderFailure.InvalidApiKey);
+        await AssertLangblyFailureAsync(HttpStatusCode.TooManyRequests, "{}", ProviderFailure.RateLimited);
+        await AssertLangblyFailureAsync(HttpStatusCode.BadGateway, "{}", ProviderFailure.ProviderUnavailable);
+        await AssertLangblyFailureAsync(HttpStatusCode.OK, "{\"data\":{}}", ProviderFailure.ProviderUnavailable);
+    }
+
+    private static async Task AssertLangblyFailureAsync(
+        HttpStatusCode status,
+        string body,
+        ProviderFailure expected)
+    {
+        var provider = new LangblyProvider(
+            new HttpClient(new StubHttpMessageHandler(_ => Task.FromResult(JsonResponse(body, status)))),
+            "key",
+            "Global",
+            string.Empty,
+            new LanguageDetector());
+        await ThrowsProviderFailureAsync(
+            () => provider.TranslateAsync(new TranslationRequest
+            {
+                Text = "Hello",
+                TargetLanguage = Language.Vietnamese
+            }, CancellationToken.None),
+            expected);
+    }
+
+    private static async Task TestLangblyTimeoutAndCancellationAsync()
+    {
+        var handler = new StubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return JsonResponse("{}");
+        });
+        using var timeoutClient = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(30) };
+        var timeoutProvider = new LangblyProvider(
+            timeoutClient, "key", "Global", string.Empty, new LanguageDetector());
+        var health = await CreateTranslationService(timeoutProvider, timeoutClient).TestProviderAsync(CancellationToken.None);
+        Equal("Timeout", health.Status);
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var cancellationProvider = new LangblyProvider(
+            new HttpClient(new StubHttpMessageHandler(async (_, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return JsonResponse("{}");
+            })),
+            "key",
+            "Global",
+            string.Empty,
+            new LanguageDetector());
+        await ThrowsAsync<OperationCanceledException>(() => cancellationProvider.TranslateAsync(
+            new TranslationRequest { Text = "Hello", TargetLanguage = Language.Vietnamese },
+            cancellation.Token));
+    }
+
+    private static Task TestLanguageCatalogAsync()
+    {
+        Equal("zh-Hans", LanguageCatalog.NormalizeCode("zh_CN"));
+        Equal("he", LanguageCatalog.NormalizeCode("iw"));
+        Equal("fil", LanguageCatalog.NormalizeCode("tl"));
+        var japaneseByName = LanguageCatalog.Search(LanguageCatalog.All, "jap");
+        Equal("ja", japaneseByName.Single().Code);
+        True(LanguageCatalog.Search(LanguageCatalog.All, "ja").Any(language => language.Code == "ja"));
+        var ordered = LanguageCatalog.OrderForPicker(LanguageCatalog.All, new[] { "ja" });
+        Equal("vi", ordered[0].Code);
+        Equal("en", ordered[1].Code);
+        Equal("zh-Hans", ordered[2].Code);
+        Equal("ja", ordered[3].Code);
+        return Task.CompletedTask;
+    }
+
+    private static async Task TestCapabilityFilteringAsync()
+    {
+        var directory = NewTestDirectory();
+        try
+        {
+            var settings = new SettingsService(directory);
+            var value = new AppSettings
+            {
+                TranslationProvider = new ProviderConfiguration { Provider = TranslationProviderNames.GoogleCloud }
+            };
+            value.ProviderLanguageCache[TranslationProviderNames.GoogleCloud] = new ProviderLanguageCacheEntry
+            {
+                FetchedAt = DateTimeOffset.UtcNow,
+                ConfigurationKey = $"{TranslationProviderNames.GoogleCloud}||",
+                TargetLanguages = [new CachedLanguage { Code = "en", DisplayName = "English" }],
+                SourceLanguages = [new CachedLanguage { Code = "vi", DisplayName = "Vietnamese" }]
+            };
+            await settings.SaveAsync(value);
+            var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+                throw new InvalidOperationException("No network request was expected.")));
+            var service = new TranslationService(
+                settings,
+                new StubCredentialStore(),
+                new LanguageDetector(),
+                httpClient,
+                new DeterministicTranslationProvider());
+            await ThrowsAsync<UnsupportedProviderLanguageException>(() => service.TranslateAsync(
+                new TranslationRequest { Text = "Hello", TargetLanguage = LanguageCatalog.Get("ja") },
+                CancellationToken.None));
+            var result = await service.TranslateAsync(
+                new TranslationRequest { Text = "Xin chào", TargetLanguage = Language.English },
+                CancellationToken.None);
+            Equal("en", result.TargetLanguage.Code);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task TestSettingsMigrationAsync()
+    {
+        var directory = NewTestDirectory();
+        try
+        {
+            var service = new SettingsService(directory);
+            await File.WriteAllTextAsync(service.SettingsPath,
+                "{\"schemaVersion\":1,\"preferredLanguage\":\"ja\",\"startWithWindows\":true," +
+                "\"hotkeys\":{\"understand\":\"Ctrl+Q\",\"translateToEnglish\":\"Alt+E\",\"translateToChinese\":\"Alt+C\",\"reply\":\"Alt+R\",\"ocrTranslate\":\"Alt+Shift+Q\"}," +
+                "\"translationProvider\":{\"provider\":\"DeepL\",\"endpoint\":\"\",\"region\":\"\"}}");
+            var loaded = await service.LoadAsync();
+            Equal(2, loaded.SchemaVersion);
+            Equal("ja", loaded.PreferredLanguage);
+            Equal("Ctrl+Q", loaded.Hotkeys.Understand);
+            Equal("DeepL", loaded.TranslationProvider.Provider);
+            Equal("en", loaded.QuickTarget1);
+            Equal("zh-Hans", loaded.QuickTarget2);
+            Equal(ResultWindowMode.Popup, loaded.ResultWindowMode);
+            True(loaded.StartWithWindows);
+
+            loaded.PreferredLanguage = "new-Latn";
+            loaded.QuickTarget1 = "new-Latn";
+            loaded.RecentLanguages = ["new-Latn"];
+            await service.SaveAsync(loaded);
+            var dynamicLanguage = await new SettingsService(directory).LoadAsync();
+            Equal("new-Latn", dynamicLanguage.PreferredLanguage);
+            Equal("new-Latn", dynamicLanguage.QuickTarget1);
+            Equal("new-Latn", dynamicLanguage.RecentLanguages.Single());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task TestResultSettingsAsync()
+    {
+        var directory = NewTestDirectory();
+        try
+        {
+            var service = new SettingsService(directory);
+            var settings = new AppSettings
+            {
+                ResultWindowMode = ResultWindowMode.Pinned,
+                PopupSizePreset = PopupSizePreset.Custom,
+                PopupWidth = 700,
+                PopupHeight = 500,
+                PopupPositionMode = PopupPositionMode.Custom,
+                PopupCustomLeft = -1200,
+                PopupCustomTop = 50,
+                PinnedBounds = new WindowBoundsSettings
+                {
+                    Left = -1500,
+                    Top = 70,
+                    Width = 630,
+                    Height = 410,
+                    Monitor = "DISPLAY-TEST"
+                }
+            };
+            await service.SaveAsync(settings);
+            var loaded = await new SettingsService(directory).LoadAsync();
+            Equal(ResultWindowMode.Pinned, loaded.ResultWindowMode);
+            Equal(630d, loaded.PinnedBounds.Width);
+            Equal("DISPLAY-TEST", loaded.PinnedBounds.Monitor);
+            var work = new PixelRect(0, 0, 1920, 1040);
+            var recovered = OverlayPositioner.ClampBounds(
+                new PixelRect(-1500, 70, -870, 480), work);
+            True(recovered.Left >= work.Left && recovered.Right <= work.Right);
+            var longTextBounds = OverlayPositioner.ClampBounds(
+                new PixelRect(0, 0, 4000, 3000), work);
+            Equal(work.Width, longTextBounds.Width);
+            Equal(work.Height, longTextBounds.Height);
+            False(ResultWindowPolicy.ShowQuickReplacementConfirmation(ResultWindowMode.Hidden));
+            True(ResultWindowPolicy.ShowQuickReplacementConfirmation(ResultWindowMode.Popup));
+            True(ResultWindowPolicy.ShowExplicitResult(ResultWindowMode.Hidden));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task TestLocalManifestAndVerificationAsync()
+    {
+        Equal(4, LocalModelManifest.Models.Count);
+        foreach (var model in LocalModelManifest.Models)
+        {
+            Equal("https", model.DownloadUri.Scheme);
+            Equal(64, model.Sha256.Length);
+            True(model.DownloadSize > 60_000_000);
+            Equal("CC-BY-4.0", model.License);
+        }
+
+        var directory = NewTestDirectory();
+        try
+        {
+            var file = Path.Combine(directory, "component.bin");
+            await File.WriteAllTextAsync(file, "verified content");
+            var hash = await LocalModelManager.ComputeSha256Async(file, CancellationToken.None);
+            await LocalModelManager.VerifyFileAsync(file, new FileInfo(file).Length, hash, CancellationToken.None);
+            await ThrowsAsync<InvalidDataException>(() => LocalModelManager.VerifyFileAsync(
+                file,
+                new FileInfo(file).Length,
+                new string('0', 64),
+                CancellationToken.None));
+
+            var package = Path.Combine(directory, "package");
+            Directory.CreateDirectory(Path.Combine(package, "model"));
+            await File.WriteAllTextAsync(Path.Combine(package, "metadata.json"), "{\"from_code\":\"vi\",\"to_code\":\"en\"}");
+            await File.WriteAllTextAsync(Path.Combine(package, "model", "model.bin"), "model");
+            await File.WriteAllTextAsync(Path.Combine(package, "sentencepiece.model"), "pieces");
+            LocalModelManager.ValidateModelPackage(package, LocalModelManifest.Models[0]);
+            await File.WriteAllTextAsync(Path.Combine(package, "metadata.json"), "{\"from_code\":\"en\",\"to_code\":\"vi\"}");
+            Throws<InvalidDataException>(() =>
+                LocalModelManager.ValidateModelPackage(package, LocalModelManifest.Models[0]));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task TestLocalModelSafetyAsync()
+    {
+        var directory = NewTestDirectory();
+        try
+        {
+            var manager = new LocalModelManager(
+                new HttpClient(new StubHttpMessageHandler(_ => throw new InvalidOperationException())),
+                directory);
+            Throws<InvalidOperationException>(() => manager.ResolveUnderRoot("..\\escape"));
+
+            var archive = Path.Combine(directory, "unsafe.zip");
+            using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+            {
+                var entry = zip.CreateEntry("../escape.txt");
+                await using var writer = new StreamWriter(entry.Open());
+                await writer.WriteAsync("unsafe");
+            }
+            Throws<InvalidDataException>(() =>
+                LocalModelManager.SafeExtractArchive(archive, Path.Combine(directory, "extract")));
+
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            await ThrowsAsync<OperationCanceledException>(() => manager.InstallAsync(
+                LocalModelManifest.Models[0], null, cancellation.Token));
+
+            MarkModelInstalled(manager, LocalModelManifest.Models[0]);
+            True(manager.IsInstalled(LocalModelManifest.Models[0]));
+            await manager.RemoveAsync(LocalModelManifest.Models[0], CancellationToken.None);
+            False(manager.IsInstalled(LocalModelManifest.Models[0]));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task TestLocalProviderRoutingAsync()
+    {
+        var directory = NewTestDirectory();
+        try
+        {
+            var manager = new LocalModelManager(
+                new HttpClient(new StubHttpMessageHandler(_ => throw new InvalidOperationException())),
+                directory);
+            var engine = new FakeLocalTranslationEngine();
+            var provider = new LocalTranslationProvider(manager, engine, new LanguageDetector());
+            MarkModelInstalled(manager, LocalModelManifest.Find("vi", "en")!);
+            var direct = await provider.TranslateAsync(new TranslationRequest
+            {
+                Text = "Xin chào",
+                SourceLanguage = Language.Vietnamese,
+                TargetLanguage = Language.English
+            }, CancellationToken.None);
+            False(direct.UsedPivot);
+            Equal(1, engine.Models.Count);
+            Equal("vi-en", engine.Models[0]);
+
+            MarkModelInstalled(manager, LocalModelManifest.Find("zh-Hans", "en")!);
+            MarkModelInstalled(manager, LocalModelManifest.Find("en", "vi")!);
+            engine.Models.Clear();
+            var pivot = await provider.TranslateAsync(new TranslationRequest
+            {
+                Text = "你好",
+                SourceLanguage = Language.SimplifiedChinese,
+                TargetLanguage = Language.Vietnamese
+            }, CancellationToken.None);
+            True(pivot.UsedPivot);
+            Equal("zh-Hans-en|en-vi", string.Join('|', engine.Models));
+            var capabilities = await provider.GetCapabilitiesAsync(CancellationToken.None);
+            True(capabilities.SupportsTarget("en"));
+            True(capabilities.SupportsTarget("vi"));
+
+            await ThrowsAsync<LocalModelUnavailableException>(() => provider.TranslateAsync(
+                new TranslationRequest
+                {
+                    Text = "Hello",
+                    SourceLanguage = Language.English,
+                    TargetLanguage = Language.SimplifiedChinese
+                },
+                CancellationToken.None));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static Task TestIconConfigurationAsync()
+    {
+        var executable = Path.Combine(AppContext.BaseDirectory, "OneBoardInlineTranslate.exe");
+        True(File.Exists(executable));
+        using var icon = System.Drawing.Icon.ExtractAssociatedIcon(executable);
+        True(icon is not null, "The application executable does not contain an icon resource.");
+        return Task.CompletedTask;
+    }
+
+    private static void MarkModelInstalled(LocalModelManager manager, LocalModelManifestEntry model)
+    {
+        var modelDirectory = manager.GetModelDirectory(model);
+        Directory.CreateDirectory(Path.Combine(modelDirectory, "model"));
+        File.WriteAllText(Path.Combine(modelDirectory, "installed.json"), "{}");
+        File.WriteAllText(Path.Combine(modelDirectory, "model", "model.bin"), "test model");
+        File.WriteAllText(Path.Combine(modelDirectory, "sentencepiece.model"), "test tokenizer");
+    }
+
     private static Task TestProviderFailureMessagesAsync()
     {
         Equal("Invalid API key", ProviderHttp.ToStatus(ProviderHttp.FromStatusCode(HttpStatusCode.Unauthorized)));
@@ -1020,7 +1502,7 @@ internal static class Program
                     var directUiaText = await Task.Run(
                         () => new UiaSelectionReader().TryRead(directUiaContext));
                     Equal("hello", directUiaText);
-                    SendAltHotkey(NativeMethods.VkE);
+                    SendIntegrationHotkey(NativeMethods.VkE);
                     var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                     while (!string.Equals(editor.Text, "[TEST] hello", StringComparison.Ordinal) &&
                            DateTime.UtcNow < deadline)
@@ -1056,7 +1538,7 @@ internal static class Program
                         $"responding={!appProcess.HasExited && appProcess.Responding};{canaryDebug}");
 
                     await ActivateAndSelectAllAsync(targetWindow, editor, "before Alt+Q");
-                    SendAltHotkey(NativeMethods.VkQ);
+                    SendIntegrationHotkey(NativeMethods.VkQ);
                     await Task.Delay(2_500);
 
                     Equal("[TEST] hello", editor.Text);
@@ -1071,13 +1553,13 @@ internal static class Program
                     // Exercise the user-facing sequence independently: capture first, then replace.
                     editor.Text = "hello";
                     await ActivateAndSelectAllAsync(targetWindow, editor, "before sequential Alt+Q");
-                    SendAltHotkey(NativeMethods.VkQ);
+                    SendIntegrationHotkey(NativeMethods.VkQ);
                     await Task.Delay(2_500);
                     Equal("hello", editor.Text);
                     VerifyTargetFocus(targetWindow, editor, "after sequential Alt+Q");
 
                     await ActivateAndSelectAllAsync(targetWindow, editor, "before sequential Alt+E");
-                    SendAltHotkey(NativeMethods.VkE);
+                    SendIntegrationHotkey(NativeMethods.VkE);
                     deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                     while (!string.Equals(editor.Text, "[TEST] hello", StringComparison.Ordinal) &&
                            DateTime.UtcNow < deadline)
@@ -1122,7 +1604,7 @@ internal static class Program
                         unavailableUiaText is null,
                         "The clipboard-only integration control unexpectedly exposed a UIA selection.");
 
-                    SendAltHotkey(NativeMethods.VkQ);
+                    SendIntegrationHotkey(NativeMethods.VkQ);
                     await Task.Delay(2_500);
                     Equal("hello", clipboardOnlyEditor.Text);
                     VerifyTargetFocus(
@@ -1137,7 +1619,7 @@ internal static class Program
                         targetWindow,
                         clipboardOnlyEditor,
                         "before clipboard-fallback Alt+E");
-                    SendAltHotkey(NativeMethods.VkE);
+                    SendIntegrationHotkey(NativeMethods.VkE);
                     deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                     while (!string.Equals(
                                clipboardOnlyEditor.Text,
@@ -1246,14 +1728,16 @@ internal static class Program
         }
     }
 
-    private static void SendAltHotkey(int virtualKey)
+    private static void SendIntegrationHotkey(int virtualKey)
     {
         var inputs = new[]
         {
-            NativeKey(NativeMethods.VkMenu, keyUp: false),
+            NativeKey(NativeMethods.VkControl, keyUp: false),
+            NativeKey(0x10, keyUp: false),
             NativeKey(virtualKey, keyUp: false),
             NativeKey(virtualKey, keyUp: true),
-            NativeKey(NativeMethods.VkMenu, keyUp: true)
+            NativeKey(0x10, keyUp: true),
+            NativeKey(NativeMethods.VkControl, keyUp: true)
         };
         var sent = NativeMethods.SendInput(
             checked((uint)inputs.Length),
@@ -1424,5 +1908,24 @@ internal static class Program
 
         public Task RemoveAsync(string name, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class FakeLocalTranslationEngine : ILocalTranslationEngine
+    {
+        internal List<string> Models { get; } = [];
+
+        public Task<string> TranslateAsync(
+            LocalModelManifestEntry model,
+            string text,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Models.Add(model.Id);
+            return Task.FromResult($"[{model.Id}] {text}");
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

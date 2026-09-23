@@ -44,11 +44,11 @@ internal sealed class DeepLTranslationProvider : ITranslationProvider
         var fields = new List<KeyValuePair<string, string>>
         {
             new("text", request.Text),
-            new("target_lang", ToDeepLCode(request.TargetLanguage))
+            new("target_lang", ProviderLanguageCodes.ToDeepL(request.TargetLanguage))
         };
         if (request.SourceLanguage is not null)
         {
-            fields.Add(new("source_lang", ToDeepLCode(request.SourceLanguage)));
+            fields.Add(new("source_lang", ProviderLanguageCodes.ToDeepL(request.SourceLanguage)));
         }
 
         using var message = new HttpRequestMessage(HttpMethod.Post, _endpoint);
@@ -90,10 +90,47 @@ internal sealed class DeepLTranslationProvider : ITranslationProvider
         return new ProviderHealth(true, DisplayName, "Connected", (long)result.Latency.TotalMilliseconds);
     }
 
-    private static string ToDeepLCode(Language language) => language.Code switch
+    public async Task<ProviderLanguageCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
-        "vi" => "VI",
-        "zh-Hans" => "ZH-HANS",
-        _ => "EN"
-    };
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            throw new ProviderException(ProviderFailure.InvalidApiKey);
+        }
+
+        var baseUri = _endpoint.GetLeftPart(UriPartial.Authority);
+        var sourceTask = GetLanguagesAsync(new Uri(baseUri + "/v2/languages?type=source"), cancellationToken);
+        var targetTask = GetLanguagesAsync(new Uri(baseUri + "/v2/languages?type=target"), cancellationToken);
+        await Task.WhenAll(sourceTask, targetTask);
+        return new ProviderLanguageCapabilities(
+            Id,
+            await sourceTask,
+            await targetTask,
+            DateTimeOffset.UtcNow);
+    }
+
+    private async Task<IReadOnlyList<Language>> GetLanguagesAsync(
+        Uri uri,
+        CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, uri);
+        message.Headers.Add("Authorization", "DeepL-Auth-Key " + _apiKey);
+        using var response = await _httpClient.SendAsync(
+            message,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        await ProviderHttp.EnsureSuccessAsync(response, inspectGoogleError: false, cancellationToken);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            return ProviderHttp.DistinctLanguages(document.RootElement.EnumerateArray().Select(item =>
+                LanguageCatalog.Resolve(
+                    item.GetProperty("language").GetString() ?? string.Empty,
+                    item.TryGetProperty("name", out var name) ? name.GetString() : null)));
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            throw new ProviderException(ProviderFailure.ProviderUnavailable);
+        }
+    }
 }

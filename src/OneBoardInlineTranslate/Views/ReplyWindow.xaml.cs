@@ -1,8 +1,10 @@
 using System.Windows;
+using System.Windows.Input;
 using OneBoardInlineTranslate.Infrastructure;
 using OneBoardInlineTranslate.Models;
 using OneBoardInlineTranslate.Services;
 using AppLanguage = OneBoardInlineTranslate.Models.Language;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace OneBoardInlineTranslate.Views;
 
@@ -13,6 +15,8 @@ public partial class ReplyWindow : Window
     private readonly IClipboardService _clipboard;
     private readonly TextReplacementService _replacement;
     private readonly Language _preferredLanguage;
+    private readonly ISettingsService _settings;
+    private IReadOnlyList<Language> _availableTargets = LanguageCatalog.All;
 
     internal ReplyWindow(
         ForegroundContext sourceContext,
@@ -21,7 +25,8 @@ public partial class ReplyWindow : Window
         Language preferredLanguage,
         ITranslationService translation,
         IClipboardService clipboard,
-        TextReplacementService replacement)
+        TextReplacementService replacement,
+        ISettingsService settings)
     {
         InitializeComponent();
         _sourceContext = sourceContext;
@@ -29,11 +34,16 @@ public partial class ReplyWindow : Window
         _translation = translation;
         _clipboard = clipboard;
         _replacement = replacement;
+        _settings = settings;
         OriginalText.Text = original;
         UnderstandingText.Text = understanding.Text;
-        TargetLanguageCombo.ItemsSource = AppLanguage.Supported;
+        TargetLanguageCombo.ItemsSource = LanguageCatalog.OrderForPicker(_availableTargets, settings.Current.RecentLanguages);
         TargetLanguageCombo.SelectedValue = understanding.SourceLanguage.Code;
-        Loaded += (_, _) => ReplyInput.Focus();
+        Loaded += async (_, _) =>
+        {
+            await LoadCapabilitiesAsync(understanding.SourceLanguage.Code);
+            ReplyInput.Focus();
+        };
     }
 
     private async void Translate_Click(object sender, RoutedEventArgs eventArgs)
@@ -47,7 +57,9 @@ public partial class ReplyWindow : Window
         try
         {
             SetBusy(true, "Translating reply...");
-            var target = AppLanguage.FromCode(TargetLanguageCombo.SelectedValue as string);
+            var target = TargetLanguageCombo.SelectedItem as Language ??
+                LanguageCatalog.Find(TargetLanguageCombo.SelectedValue as string) ??
+                understandingFallback();
             var result = await _translation.TranslateAsync(new TranslationRequest
             {
                 Text = ReplyInput.Text,
@@ -55,12 +67,17 @@ public partial class ReplyWindow : Window
                 TargetLanguage = target
             }, CancellationToken.None);
             TranslatedReply.Text = result.Text;
+            await RememberLanguageAsync(target.Code);
             SetBusy(false, "Review the translation, then choose Insert or Copy.");
         }
         catch (Exception exception)
         {
-            SetBusy(false, $"Translation failed ({exception.GetType().Name}).");
+            SetBusy(false, exception is UnsupportedProviderLanguageException
+                ? exception.Message
+                : $"Translation failed ({exception.GetType().Name}).");
         }
+
+        Language understandingFallback() => _availableTargets.FirstOrDefault() ?? AppLanguage.English;
     }
 
     private async void Insert_Click(object sender, RoutedEventArgs eventArgs)
@@ -138,5 +155,69 @@ public partial class ReplyWindow : Window
         ReplyInput.IsEnabled = !busy;
         TargetLanguageCombo.IsEnabled = !busy;
         StatusText.Text = status;
+    }
+
+    private async Task LoadCapabilitiesAsync(string selectedCode)
+    {
+        try
+        {
+            var capabilities = await _translation.GetLanguageCapabilitiesAsync(false, CancellationToken.None);
+            _availableTargets = capabilities.TargetLanguages.Count > 0
+                ? capabilities.TargetLanguages
+                : LanguageCatalog.All;
+        }
+        catch
+        {
+            _availableTargets = LanguageCatalog.All;
+        }
+
+        SetLanguageItems(selectedCode);
+        if (TargetLanguageCombo.SelectedItem is null)
+        {
+            StatusText.Text = "The detected incoming language is unavailable with the current provider. Choose another target.";
+        }
+    }
+
+    private void TargetLanguageCombo_KeyUp(object sender, KeyEventArgs eventArgs)
+    {
+        if (eventArgs.Key is Key.Up or Key.Down or Key.Enter or Key.Escape or Key.Tab)
+        {
+            return;
+        }
+
+        var query = TargetLanguageCombo.Text;
+        TargetLanguageCombo.ItemsSource = LanguageCatalog.Search(
+            _availableTargets,
+            query,
+            _settings.Current.RecentLanguages);
+        TargetLanguageCombo.IsDropDownOpen = true;
+        TargetLanguageCombo.Text = query;
+    }
+
+    private void TargetLanguageCombo_DropDownOpened(object sender, EventArgs eventArgs)
+    {
+        if (TargetLanguageCombo.SelectedItem is Language selected)
+        {
+            SetLanguageItems(selected.Code);
+        }
+    }
+
+    private void SetLanguageItems(string selectedCode)
+    {
+        TargetLanguageCombo.ItemsSource = LanguageCatalog.OrderForPicker(
+            _availableTargets,
+            _settings.Current.RecentLanguages);
+        TargetLanguageCombo.SelectedValue = selectedCode;
+    }
+
+    private async Task RememberLanguageAsync(string code)
+    {
+        var updated = _settings.Current.Clone();
+        updated.RecentLanguages = new[] { LanguageCatalog.NormalizeCode(code) }
+            .Concat(updated.RecentLanguages)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+        await _settings.SaveAsync(updated);
     }
 }

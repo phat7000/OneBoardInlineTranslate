@@ -24,8 +24,10 @@ internal sealed class TranslationResult
 
     internal TimeSpan Latency { get; init; }
 
+    internal bool UsedPivot { get; init; }
+
     public override string ToString() =>
-        $"TranslationResult(Provider={ProviderId}, Source={SourceLanguage.Code}, Target={TargetLanguage.Code}, Length={Text.Length})";
+        $"TranslationResult(Provider={ProviderId}, Source={SourceLanguage.Code}, Target={TargetLanguage.Code}, Pivot={UsedPivot}, Length={Text.Length})";
 }
 
 internal sealed record ProviderHealth(
@@ -41,9 +43,12 @@ internal static class TranslationProviderNames
     internal const string Azure = "Azure Translator";
     internal const string DeepL = "DeepL";
     internal const string LibreTranslate = "LibreTranslate";
+    internal const string TranslatePlus = "TranslatePlus";
+    internal const string Langbly = "Langbly";
+    internal const string Local = "Local Translation";
 
     internal static IReadOnlyList<string> All { get; } =
-        [None, GoogleCloud, Azure, DeepL, LibreTranslate];
+        [None, GoogleCloud, Azure, DeepL, LibreTranslate, TranslatePlus, Langbly, Local];
 }
 
 internal sealed class ProviderConfiguration
